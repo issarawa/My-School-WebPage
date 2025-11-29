@@ -1,0 +1,2635 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>مدرسة مادبا الثانوية للبنين - البوابة الإلكترونية</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Tajawal', 'sans-serif'],
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out',
+                        'fade-in-up': 'fadeInUp 0.5s ease-out',
+                        'bounce-in': 'bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        bounceIn: {
+                            '0%': { transform: 'scale(0.8)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Recharts -->
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide-react/dist/umd/lucide-react.js"></script>
+
+    <!-- SheetJS (XLSX) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: #f9fafb;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c7c7c7; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8; 
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="typescript,react">
+        const { useState, useEffect, useRef, useMemo } = React;
+        
+        // Destructure Icons. Note: Alias BarChart icon to avoid conflict with Recharts BarChart
+        const { 
+            School, Users, GraduationCap, Star, Image: ImageIcon, Database, Download, Upload, X, Check, 
+            MapPin, Phone, Award, BookOpen, Target, Clock, ExternalLink, Layers, Briefcase, PenTool,
+            Plus, Search, Edit2, Trash2, FileText, Calendar, BarChart: BarChartIcon, Eye, ThumbsUp, Heart,
+            Smile, Meh, Frown, HeartCrack, Tag, UploadCloud, Filter, FileType, UserCog
+        } = lucideReact;
+
+        const { 
+            BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, 
+            PieChart, Pie, Legend 
+        } = Recharts;
+
+        // --- TYPES & ENUMS ---
+        
+        enum Category {
+            ADMIN = 'الإداريون',
+            TEACHER = 'المعلمون',
+            EMPLOYEE = 'المستخدمون'
+        }
+
+        // --- IndexedDB Utility Class ---
+        const DB_NAME = 'MadabaSchoolDB';
+        const STORE_NAME = 'gallery';
+        const DB_VERSION = 1;
+
+        const db = {
+            open: () => {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                        }
+                    };
+                    request.onsuccess = (event) => {
+                        resolve(event.target.result);
+                    };
+                    request.onerror = (event) => {
+                        reject(event.target.error);
+                    };
+                });
+            },
+            getAllImages: async () => {
+                const dbInstance = await db.open();
+                return new Promise((resolve, reject) => {
+                    const transaction = dbInstance.transaction(STORE_NAME, 'readonly');
+                    const store = transaction.objectStore(STORE_NAME);
+                    const request = store.getAll();
+                    request.onsuccess = () => {
+                        // Return reversed to show newest first
+                        resolve(request.result.reverse());
+                    };
+                    request.onerror = () => reject(request.error);
+                });
+            },
+            addImage: async (image) => {
+                const dbInstance = await db.open();
+                return new Promise((resolve, reject) => {
+                    const transaction = dbInstance.transaction(STORE_NAME, 'readwrite');
+                    const store = transaction.objectStore(STORE_NAME);
+                    const request = store.add(image);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            },
+            deleteImage: async (id) => {
+                const dbInstance = await db.open();
+                return new Promise((resolve, reject) => {
+                    const transaction = dbInstance.transaction(STORE_NAME, 'readwrite');
+                    const store = transaction.objectStore(STORE_NAME);
+                    const request = store.delete(id);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            },
+            clearGallery: async () => {
+                const dbInstance = await db.open();
+                return new Promise((resolve, reject) => {
+                    const transaction = dbInstance.transaction(STORE_NAME, 'readwrite');
+                    const store = transaction.objectStore(STORE_NAME);
+                    const request = store.clear();
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+        };
+
+        // --- CONSTANTS ---
+
+        const INITIAL_STAFF = [
+            // Administrators
+            { 
+                id: '1', sortId: 1, ministryNumber: '76391', nationalNumber: '9661038017', name: 'لطفي يوسف محمد المشارفة', 
+                jobTitle: 'مدير مدرسة', category: Category.ADMIN, degree: 'الثالثة', qualification: 'ماجستير', specialization: 'لغة عربية',
+                birthDate: '01/01/1966', appointmentDate: '22/09/1989', residence: 'مادبا المامونية', phoneNumber: '0782864677'
+            },
+            { 
+                id: '2', sortId: 2, ministryNumber: '155303', nationalNumber: '9811052004', name: 'أنس عواد جدعان الحواتمة', 
+                jobTitle: 'مساعد مدير', category: Category.ADMIN, degree: 'الثالثة', qualification: 'بكالوريوس+دبلوم عالي', specialization: 'اللغة العربية وآدابها',
+                birthDate: '16/11/1981', appointmentDate: '03/12/2007', residence: 'مادبا', phoneNumber: '0772337338'
+            },
+            { 
+                id: '3', sortId: 3, ministryNumber: '186755', nationalNumber: '9871049766', name: 'بكر عيسى فالح العجالين', 
+                jobTitle: 'سكرتير', category: Category.ADMIN, degree: 'الخامسة', qualification: 'بكالوريوس', specialization: 'إدارة الأعمال',
+                birthDate: '18/05/1987', appointmentDate: '23/07/2013', residence: 'مادبا', phoneNumber: '0777577343'
+            },
+            { 
+                id: '4', sortId: 4, ministryNumber: '122169', nationalNumber: '9761036944', name: 'نمر عبد الحميد مضفي الونديين', 
+                jobTitle: 'مرشد تربوي', category: Category.ADMIN, degree: 'الثانية', qualification: 'بكالوريوس', specialization: 'ارشاد وصحة نفسية',
+                birthDate: '01/01/1976', appointmentDate: '23/10/2002', residence: 'ماعين', phoneNumber: '0772097790'
+            },
+            { 
+                id: '5', sortId: 5, ministryNumber: '224002', nationalNumber: '9921046595', name: 'عبدالمهدي احمد عبدالمهدي الخريبات', 
+                jobTitle: 'أمين مكتبة', category: Category.ADMIN, degree: 'السابعة', qualification: 'بكالوريوس', specialization: 'ادارة مكتبات ومعلومات',
+                birthDate: '12/10/1992', appointmentDate: '13/03/2024', residence: 'مادبا', phoneNumber: '0772580039'
+            },
+            { 
+                id: '6', sortId: 6, ministryNumber: '123922', nationalNumber: '9671029409', name: 'علي احمد محمود العسراوي', 
+                jobTitle: 'قيم مختبر حاسوب', category: Category.ADMIN, degree: 'الرابعة', qualification: 'دبلوم', specialization: 'حاسبات الكترونية',
+                birthDate: '02/12/1967', appointmentDate: '04/09/2003', residence: 'مادبا المأمونية', phoneNumber: '0775218820'
+            },
+            { 
+                id: '7', sortId: 7, ministryNumber: '135150', nationalNumber: '9701024518', name: 'اسامة احمد ناجي الصادق', 
+                jobTitle: 'قيم مختبر علوم', category: Category.ADMIN, degree: 'الرابعة', qualification: 'دبلوم', specialization: 'هندسة كيميائية',
+                birthDate: '31/01/1970', appointmentDate: '05/09/2005', residence: 'مادبا', phoneNumber: '0795002408'
+            },
+            // Teachers
+            { 
+                id: '8', sortId: 8, ministryNumber: '81154', nationalNumber: '9681002780', name: 'محمد عليان مفلح الشوابكة', 
+                jobTitle: 'معلم أول', category: Category.TEACHER, degree: 'الثانية', qualification: 'بكالوريوس', specialization: 'تاريخ',
+                birthDate: '12/04/1968', appointmentDate: '23/08/1992', workload: 13, residence: 'مادبا - جرينة', phoneNumber: '0782760539'
+            },
+            { 
+                id: '9', sortId: 9, ministryNumber: '96969', nationalNumber: '9741004269', name: 'خالد أمين عثمان الاعرج', 
+                jobTitle: 'معلم أول', category: Category.TEACHER, degree: 'الأولى', qualification: 'دبلوم بعد البكالوريوس', specialization: 'أنجليزي',
+                birthDate: '24/09/1974', appointmentDate: '21/08/1996', workload: 15, residence: 'مادبا', phoneNumber: '0777461013'
+            },
+            { 
+                id: '10', sortId: 10, ministryNumber: '98464', nationalNumber: '9731004178', name: 'احمد علي احمد شومان', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الأولى', qualification: 'دبلوم بعد البكالوريوس', specialization: 'دعوة وأصول دين',
+                birthDate: '13/03/1973', appointmentDate: '27/08/1996', workload: 13, residence: 'مادبا', phoneNumber: '0776100965'
+            },
+            { 
+                id: '11', sortId: 11, ministryNumber: '99980', nationalNumber: '9751035488', name: 'ماهر محمد بدوي ابراهيم', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الأولى', qualification: 'ماجستير', specialization: 'لغة انجليزية',
+                birthDate: '07/08/1975', appointmentDate: '31/08/1996', workload: 15, residence: 'مادبا', phoneNumber: '0777377236'
+            },
+            { 
+                id: '12', sortId: 12, ministryNumber: '102613', nationalNumber: '9761046760', name: 'منصور علي محمود الوحش', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الأولى', qualification: 'بكالوريوس', specialization: 'اللغة العربية وآدابها',
+                birthDate: '28/03/1976', appointmentDate: '01/01/1998', workload: 21, residence: 'مادبا المأمونية الغربية', phoneNumber: '0777732765'
+            },
+            { 
+                id: '13', sortId: 13, ministryNumber: '109447', nationalNumber: '9771050486', name: 'عيسى خلف جمعه الرواحنه', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الرابعة', qualification: 'بكالوريوس', specialization: 'علوم الحاسوب',
+                birthDate: '31/12/1977', appointmentDate: '28/08/2000', workload: 12, residence: 'مادبا', phoneNumber: '0772769556'
+            },
+            { 
+                id: '14', sortId: 14, ministryNumber: '115420', nationalNumber: '9701026586', name: 'محمد مصطفى محمد خضر', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الثانية', qualification: 'بكالوريوس', specialization: 'كيمياء',
+                birthDate: '08/06/1970', appointmentDate: '28/08/2001', workload: 18, residence: 'مادبا بجانب مسجد القدس', phoneNumber: '0775107441'
+            },
+            { 
+                id: '15', sortId: 15, ministryNumber: '116039', nationalNumber: '9741002208', name: 'منتصر سليمان محمد الزواهرة', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الثالثة', qualification: 'بكالوريوس', specialization: 'تربية رياضية',
+                birthDate: '07/03/1974', appointmentDate: '26/08/2001', workload: 11, residence: 'مادبا', phoneNumber: '0779435093'
+            },
+            { 
+                id: '16', sortId: 16, ministryNumber: '117126', nationalNumber: '9771002237', name: 'جوزيف مخائيل يوسف جعنيني', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الأولى', qualification: 'بكالوريوس', specialization: 'احياء دقيقة',
+                birthDate: '13/05/1977', appointmentDate: '26/08/2001', workload: 19, residence: 'مادبا', phoneNumber: '0772680383'
+            },
+            { 
+                id: '17', sortId: 17, ministryNumber: '117464', nationalNumber: '9771048938', name: 'محمد ابراهيم محمد ابو سعيد', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الثانية', qualification: 'دبلوم بعد البكالوريوس', specialization: 'دعوه و اصول دين',
+                birthDate: '11/06/1977', appointmentDate: '09/10/2001', workload: 15, residence: 'مادبا / حنينا', phoneNumber: '0777460971'
+            },
+            { 
+                id: '18', sortId: 18, ministryNumber: '117766', nationalNumber: '9781051626', name: 'احمد محمود احمد عبيدات', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الثانية', qualification: 'بكالوريوس', specialization: 'الفيزياء',
+                birthDate: '20/04/1978', appointmentDate: '26/08/2001', workload: 16, residence: 'مادبا - حنينا', phoneNumber: '0777715081'
+            },
+            { 
+                id: '19', sortId: 19, ministryNumber: '118992', nationalNumber: '9791001989', name: 'عبد الله خليل غندور البشيش', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الثالثة', qualification: 'ماجستير', specialization: 'رياضيات',
+                birthDate: '29/07/1979', appointmentDate: '25/08/2002', workload: 18, residence: 'مادبا', phoneNumber: '0777638900'
+            },
+            { 
+                id: '20', sortId: 20, ministryNumber: '118997', nationalNumber: '9791037940', name: 'اسامة جميل فالح المعايعة', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الثانية', qualification: 'بكالوريوس', specialization: 'علوم ارض',
+                birthDate: '05/06/1979', appointmentDate: '25/08/2002', workload: 19, residence: 'مادبا حي الخلفاء', phoneNumber: '0777305760'
+            },
+            { 
+                id: '21', sortId: 21, ministryNumber: '119024', nationalNumber: '9771038947', name: 'منذر ابراهيم حسين ابو رقيق', 
+                jobTitle: 'معلم اول', category: Category.TEACHER, degree: 'الثانية', qualification: 'بكالوريوس', specialization: 'حاسوب',
+                birthDate: '07/05/1977', appointmentDate: '25/08/2002', workload: 14, residence: 'مادبا حي العلماء', phoneNumber: '0777236419'
+            },
+            { 
+                id: '22', sortId: 22, ministryNumber: '128532', nationalNumber: '9821057587', name: 'فايز محمد ارشيد الحيصة', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الثالثة', qualification: 'بكالوريوس', specialization: 'اللغة العربية وآدابها',
+                birthDate: '10/10/1982', appointmentDate: '24/08/2004', workload: 18, residence: 'مادبا - خلف الستي مول', phoneNumber: '0779905166'
+            },
+            { 
+                id: '23', sortId: 23, ministryNumber: '152771', nationalNumber: '9821044291', name: 'عمار فتحي سليم جعيدي', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الثالثة', qualification: 'بكالوريوس', specialization: 'اللغتين الايطالية والإنجليزية',
+                birthDate: '14/08/1982', appointmentDate: '16/08/2007', workload: 15, residence: 'مادبا', phoneNumber: '0780377607'
+            },
+            { 
+                id: '24', sortId: 24, ministryNumber: '169707', nationalNumber: '9851039000', name: 'احمد منصور عايش السليمات', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الرابعة', qualification: 'بكالوريوس', specialization: 'جغرافيا',
+                birthDate: '08/04/1985', appointmentDate: '04/09/2010', workload: 18, residence: 'مأدبا - قرب مستشفى النديم', phoneNumber: '0779606081'
+            },
+            { 
+                id: '25', sortId: 25, ministryNumber: '171248', nationalNumber: '9881043752', name: 'انس عايش محمد الطفيحات', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الرابعة', qualification: 'ماجستير', specialization: 'رياضيات',
+                birthDate: '19/06/1988', appointmentDate: '23/09/2010', residence: 'مليح', phoneNumber: '0776935408'
+            },
+            { 
+                id: '26', sortId: 26, ministryNumber: '181989', nationalNumber: '9871047222', name: 'مجدي هاشم قبلان الفقهاء', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'الرابعة', qualification: 'ماجستير', specialization: 'الفيزياء',
+                birthDate: '10/07/1987', appointmentDate: '17/10/2012', workload: 17, residence: 'مادبا', phoneNumber: '0797433640'
+            },
+            { 
+                id: '27', sortId: 27, ministryNumber: '208100', nationalNumber: '9941045137', name: 'عماد ممدوح محمد ابو ارقيق', 
+                jobTitle: 'معلم', category: Category.TEACHER, degree: 'السادسة', qualification: 'بكالوريوس', specialization: 'الرياضيات',
+                birthDate: '17/05/1994', appointmentDate: '01/09/2019', workload: 18, residence: 'مادبا', phoneNumber: '0772475684'
+            },
+            { 
+                id: '28', sortId: 28, ministryNumber: '228051', nationalNumber: '9821034960', name: 'يحيى سليمان محمد القيسي', 
+                jobTitle: 'تعيين جديد (عقد)', category: Category.TEACHER, degree: 'معلم', qualification: 'بكالوريوس + دبلوم عالي', specialization: 'إدارة الأعمال',
+                birthDate: '01/09/1982', appointmentDate: '15/08/2025', workload: 25, residence: 'مادبا', phoneNumber: '0777711314'
+            },
+            { 
+                id: '29', sortId: 29, ministryNumber: '228066', nationalNumber: '9981031346', name: 'عبدالله احمد فالح المعاعية', 
+                jobTitle: 'تعيين جديد (عقد)', category: Category.TEACHER, degree: 'معلم', qualification: 'بكالوريوس + دبلوم عالي', specialization: 'الشريعة (فقه واصوله)',
+                birthDate: '02/07/1998', appointmentDate: '17/08/2025', workload: 15, residence: 'الفيحاء', phoneNumber: '0772711802'
+            },
+            { 
+                id: '30', sortId: 30, ministryNumber: '228067', nationalNumber: '2000143633', name: 'لؤي فايق علي الخواطرة', 
+                jobTitle: 'تعيين جديد (عقد)', category: Category.TEACHER, degree: 'معلم', qualification: 'بكالوريوس + دبلوم عالي', specialization: 'الشريعة (اصول دين)',
+                birthDate: '05/02/1994', appointmentDate: '17/08/2025', workload: 15, residence: 'مادبا', phoneNumber: '0778164183'
+            },
+            // Employees
+            { id: '31', sortId: 31, ministryNumber: '3206288', name: 'محمد عبدالله عبد العبابسة', jobTitle: 'آذن مدرسة', category: Category.EMPLOYEE },
+            { id: '32', sortId: 32, ministryNumber: '3202579', name: 'سليمان احمد عبداللطيف العبابسة', jobTitle: 'حارس مدرسة', category: Category.EMPLOYEE },
+        ];
+
+        const INITIAL_CLASSES = [
+             { 
+                id: '11-acad-a', 
+                name: 'الحادي عشر أكاديمي (أ)', 
+                gradeLevel: '11', 
+                color: 'blue', 
+                students: [
+                "ابراهيم خليل ابراهيم الكراملة", "احمد حمزة جمعة ابو مساعد", "احمد خالد محمد الموازرة", "احمد محمد عيسى السليمات", "جعفر ايهاب احمد ابو هدبة", "حسام الدين سائد يوسف الددا", "حمزة ابراهيم فواز العطاونة", "خالد ايمن يوسف ابو ناب", "راشد عصام عبدالرزاق المطيريين", "رشاد عبدالقادر اسماعيل مقبل", "زياد سليمان لافي الغديفي", "زيد سليم سليمان الكعابنة", "صالح هاشم احمد زيدان", "طارق شادي عمر الواوي", "عامر اشرف اسحق ابو تينة", "عبدالرحمن محمد عبدالله ابو حيانه", "عبدالرحمن مصلح عودة العزازمة", "عبدالرحمن هاني محمود الدبس", "عبدالله بلال عبدالعزيز السوالمة", "عبدالمجيد احمد عبدالمجيد انشاصي", "عبدالمجيد هاني محمد الكسابرة", "علاء الدين شريف اسحاق ابو تينة", "علي محمد علي ابو غيث", "عمار محمد عبدالمجيد العجوري", "كنان ايمن خضر ابو تينة", "مالك عوض سليمان البحرات", "مجدي اسماعيل محمد ذيبان", "محمد انور محمد ابواللوز", "محمد اياد عطا البرميل", "محمد حسين محمد النواصرة", "محمد عمر عيد الجفيرات", "محمد كامل محمود مشعل", "محمد يحيى عدنان نهنوش", "محمود انيس احمد الحولي", "معتصم خلف عبدالكريم البواريد", "مناف محمد نصار البواريد", "هيثم عودة مسلم البحرات", "وديع رامي محمد التين", "ورد عايش موسى النجار", "وسام مالك صلاح الطرمان", "يزن فايز خالد الحلايبة", "يزن محمد نايف رباع", "ينال احمد عبدالحسن الفاعوري", "ينال مازن حسن الزواهرة"
+                ] 
+            },
+            { 
+                id: '11-acad-b', 
+                name: 'الحادي عشر أكاديمي (ب)', 
+                gradeLevel: '11', 
+                color: 'indigo', 
+                students: [
+                "ابراهيم جهاد علي ابو جزر", "ابراهيم يحيى اسعد غانم", "امير ماجد سلامة سالم", "انس عامر عادل جعارة", "ايهم ابراهيم احمد الدقس", "ايهم غسان سليمان ابو تيلخ", "بشار عادل مدالله المضايبين", "بشار يزن ياسين ابو هنية", "جابر حسن يحيى ابو جابر", "درويش صالح محمد الربايعة", "راشد ذياب فلاح الخضور", "راشد علي خالد الحلايبة", "ريان طه سعد اخميس", "زيد عبدالرحمن محمد رزق", "سيف الدين طارق سالم السنيان", "سيف الدين محمد سالم ابو راشد", "صخر محمد مسلم الددا", "صهيب ماجد احمد الصليبي", "طارق علي توفيق الدية", "طارق عماد سالم العتيبي", "عبدالله رافع احمد شاهين بدران", "عبدالله فؤاد سليم الشورة", "عبدالله محمد عبدالنعيم المصاروة", "عبدالله محمد عليان الشوابكة", "علي احمد عبدالفتاح ابومرعي", "عمار سلمان محمد عياد", "عمر عدنان عبدالله ابوعمران", "عمر عيسى فرحان البريزات", "عمر محمد عيد الغدايرة", "فتحي محمد فتحي ابو تينة", "كرم هشام محمود ابو عيشة", "مالك عادل علي ابوهدبه ابوشنار", "مالك عطا عبدالله ابو جودة", "محمد ابراهيم سلامة ابو جودة", "محمد ايمن عبدالرحمن ابو الحاج", "محمد خضر خليل الطنطاوي", "محمد علي موسى ابو جودة", "محمد نضال حسن شتات", "محمود علي محمود الدبس", "مصطفى اياد خليل الحموي", "معتصم رزق نواف اعمر", "مهند زيدان صبري زيدان", "نائل جمعة عبدالفتاح الصافي", "هاشم فراس بختان السنيد", "هاني ايمن مفضي الحلايبة"
+                ] 
+            },
+            { 
+                id: '11-acad-c', 
+                name: 'الحادي عشر أكاديمي (ج)', 
+                gradeLevel: '11', 
+                color: 'violet', 
+                students: [
+                "ابراهيم احمد سليمان الحواتمة", "احمد ابراهيم علي محمد علي", "احمد ابراهيم عبدالمجيد الخريبات", "احمد عبدالجليل احمد السليمات", "احمد مؤيد احمد الطنطاوي", "اسامة محمد صابر الددا", "اكرم خالد محمود بن سعيد", "اليمان حمزة محمود جابر", "انس صايل سليمان الطرمان", "ايهم منير علي ابو غيث", "حسام محمد محمود الطنطاوي", "راشد خالد سلامة الكعابنة", "راشد خالد عيد الغدايرة", "ريان معتز سليم ابو عيشة", "زياد فيصل نبيل حدادين", "صفوان عبدالحكيم محمود اشهيل", "طلال يوسف علي ابو غيث", "عبدالرحمن عمر محمد سعدي عثمان", "عبدالرحمن نبيل الكراملة", "عبدالله طايل شتيان الكعابنة", "عبدالله محمد فريد القريوتي", "عبدالمجيد احمد عبدالمجيد العجوري", "عزالدين خالد محمد ابوجودة", "عزالدين محمد حسن شبانه", "علي ابراهيم محمد ابو هدبة", "علي احمد خالد خرما", "علي خالد علي العوامرة", "علي يوسف محمود القطاوي", "عمار حمزة حامد الفقهاء", "عمر يوسف زعل الحنيني", "متعب امجد عبدالله الكدراوي", "متعب سليمان عايش المحمديين", "محمد اياد محمد ابو ناب", "محمد زيد سالم ابو جودة", "محمد عبدالقادر عيسى الدبس", "محمد عبداللطيف عبدالله الغنيمات", "محمد محمود عبدالرحمن الزغاري", "محمد موسى محمد رزق", "محمد ناصر مفلح الكعابنة", "مصطفى ابراهيم محمد الفشيكات", "معاذ محمد عوض السوارية", "موسى اسماعيل موسى ابوهدبا ابوشنار", "موسى عمر موسى الفالوجي", "مؤمن زياد احمد الهور", "نعيم احمد ضيف الله ابو يحيى"
+                ] 
+            },
+            { 
+                id: '11-acad-d', 
+                name: 'الحادي عشر أكاديمي (د)', 
+                gradeLevel: '11', 
+                color: 'purple', 
+                students: [
+                "ابراهيم عدنان ضيف الله ابو يحيى", "احمد سلمان ارحيل الكعابنة", "احمد طلعت احمد الغصين", "احمد علي ابراهيم محمود", "اكرم عاصم احمد الصغير", "اليمان علي حسني الدبس", "امير احمد عبدالحليم الحبابسة", "بشار زيد خلف الحديثات", "بهاء عبدالناصر فريد عواد", "جمال حسن جمال خليل", "جواد عبدالله مصطفى الشريف", "حازم منور عواد عويمر", "رفاد محمد عارف النشاش", "ريان حسين احمد ابو عمران", "سائد محمود ابراهيم البوشي", "صهيب انس احمد الخريبات", "عبدالرحمن احمد جمعة المصالحة", "عبدالرحمن محمد ياسين عواد", "عبدالكريم محمد حمدان العرني", "عصام احمد حمدان الطرشان", "علي محمد علي كامل المحمد علي", "عمرو اشرف محمد عودة", "قيس احمد حمد خليفات", "ماجد طه مشهور العقيل", "مالك علي محمد القريوتي", "مالك محمد فهد الخواطرة", "مالك يوسف ابراهيم بن سعيد", "محمد ابراهيم حسين ابومقيبل", "محمد اشرف صبحي سلامة", "محمد خالد سلامة السعود", "محمد خلف سلامة الافشق", "محمد رائد زهدي جعارة", "محمد سالم محمد الخضيرات", "محمد علي نصار المراعية", "محمد فيصل عودة القعايدة", "محمود حسين محمود سرحان", "محمود عصام محمود الزواهرة", "معتز خالد عبدالحميد الزوايدة", "معن ابراهيم محمود اصليح", "مؤيد جمعة علي الربايعة", "هاشم غسان علي ابو نصير", "يوسف مصعب يوسف الخريبات", "يونس رامي محمد الشاهين"
+                ] 
+            },
+            { 
+                id: '12-health-a', 
+                name: 'الثاني عشر صحي (أ)', 
+                gradeLevel: '12', 
+                color: 'rose', 
+                students: [
+                "احمد عصام سميح جعارة", "احمد فارس يوسف بن سعيد", "احمد محمد سعدي عيسى", "احمد نضال عبدالحميد الدقاق", "جواد شاهين محمد شاهين", "حبيب ابراهيم سليم العمارات", "حسين عادل حسين ابو عيشة", "حمزة عبدالهادي عبدالله الرواشدة", "ريان معاذ هلال ابوحشيش", "عاهد محمود حسين ابوعمران", "عبدالرحمن محمد سالم ابوراشد", "عبدالعزيز زياد عبدالعزيز ابوعمران", "عبدالله محمد عبدالله ابوالزينات", "عمر محمد رجا ابووندي", "فراس صالح مسلم الحميد", "فيصل خالد خلف البدور", "مجاهد عصام احمد مقبل", "محمد جمال محمد احمد", "محمد عصام سميح جعارة", "محمد علي حسين الفساطلة", "يمان اشرف ابو عيشة"
+                ] 
+            },
+            { 
+                id: '12-health-b', 
+                name: 'الثاني عشر صحي (ب)', 
+                gradeLevel: '12', 
+                color: 'pink', 
+                students: [
+                "ابراهيم عبدالناصر هاشم ابوعمران", "ابراهيم منذر ابراهيم ابورقيق", "احمد ايمن سليمان الفساطلة", "اصيل ماجد سلامة سالم", "ايهم عدنان حسين الفساطلة", "جواد احمد سعد الكراملة", "حسان عبدالرحيم عبدالحافظ الضرابعة", "حسين احمد حسين رضوان", "حمزة خليل توفيق ابراهيم", "حمزة فايز خالد الحلايبة", "خليل حسن خليل الطنطاوي", "ريان محمد موسى الغوراني", "زيد مروان موسى الخطيب", "سالم ماهر سالم العيادة", "سلطان طارق نمر أحمد", "سلطان ناصر احمد الشاهين", "سند مشهور صالح ابوحشيش", "عبدالرحمن ابراهيم محمد خميس", "عبدالله غازي عواد العوايدة", "عبدالله ماجد سلمان العطوي", "عبدالله يوسف عبدالله مقبل", "عبدالوهاب امجد عبدالله التين", "عبدالوهاب عمر عوض داود", "عبيدة ممدوح عبطان الخرطي", "علي موسى محمد المناسية", "ليث باسل عوني ابراهيم", "محمد جلال نايف المعاعية", "محمد سليمان علي الحبابسة", "محمد فارس حماد ابورقيق", "نزار ربحي احمد العبسي", "يافث مصطفى حسان ابوسرور", "يامن محمد عبدالله سنجلاوي", "يوسف بلال احمد عويضة", "يوسف سامي عمر الواوي"
+                ] 
+            },
+            { 
+                id: '12-eng', 
+                name: 'الثاني عشر هندسي', 
+                gradeLevel: '12', 
+                color: 'orange', 
+                students: [
+                "ابراهيم محمد سلامة العجوليين", "آدم غالب فارس الحن", "اكثم غازي عبدالقادر الوليدات", "اياد عادل احمد ابوعيشة", "ايهم مازن احمد المعايعة", "براء اياد ابراهيم المليطي", "تامر ابراهيم احمد عواد", "تميم وجدي محمد صادق", "جواد تيسير عويد الدهمان", "حزم محمد عطوان السعيدات", "سند امجد سالم القاسم", "صالح سليمان صالح ابوحويلة", "عبدالرحمن مصطفى حسين حسين", "عبدالقادر نضال محمود حمدالله", "عبدالله علاء صالح ابو حشيش", "عبدالوهاب فهد عبدالوهاب الدهامشة", "علاءالدين شبلي جركس الشبلي", "عمر حمزة فريد عواد", "عيسى عمر عيسى المصري", "عيسى يوسف رجب الفقهاء", "فيصل ربيع تيسير الرواحنة", "كمال وائل كمال ابو شنار", "ليث محمد عزات السماحين", "مالك اسعد محمد جابر", "مالك فيصل عبدالله الجباهين", "مثنى ابراهيم افليح العجوليين", "محمد احمد محمد الفساطلة", "محمد اسامة جميل المعايعة", "محمد راشد احمد ابراهيم السيد", "محمد سلامة سالم الدهامشة", "محمد عبدالكريم سالم الشوابكة", "محمد عدنان خاطر الغزاوي", "محمد عمر محمد الشوابكة", "محمد مازن علي الحيصة", "محمد محمود محمد الفساطلة", "محمد مراد فتحي الكراملة", "محمد ياسر مصطفى عبدالغني", "محمد يونس فلاح الشوابكة", "مصعب عبدالحي سليمان الطرمان", "معن ثامر عبدالله الكدراوي", "منذر اسماعيل ابراهيم كنعان", "مينا سمير خليفة اسكندر", "وديع مهند عبدالجليل عبدالرحمن", "وسام طارق صالح الدعامسة"
+                ] 
+            },
+            { 
+                id: '12-tech', 
+                name: 'الثاني عشر تكنولوجيا', 
+                gradeLevel: '12', 
+                color: 'cyan', 
+                students: [
+                "المعتصم ناصر احمد الكسابرة", "انس ابراهيم احمد الشوابكة", "انس محمد نديم عبدالقادر الحمود", "تركي هيثم حمد الدهامشة", "جواد محمد طالب البلوي", "حذيفة ممدوح محمد ابوهاني", "خالد عامر عيد الجفيرات", "خالد منصور خالد الحلايبة", "سليمان رائد سلامة الشوابكة", "سيف الدين احمد مفلح الحلايبة", "عبدالرحمن مفلح خلف الطيب", "عبدالرحمن منصور محمد الربايعة", "عبدالله بسام فالح الفلاحات", "عبدالله عوض جميل دبور", "عبدالله محمود راشد العوايدة", "عدي ابراهيم عوض داود", "عمار احمد فضيل الفقهاء", "عمر محمود سليمان بكار", "عمران بشار اكرم كسابرة", "فارس امجد خالد الجغبير", "محمد احمد محمد كسابرة", "محمد احمد ضيف الله المصالحة", "محمد حمزة محمد صرار", "محمد خلوف عيسى العويد", "محمد رائد يوسف الصدوق", "محمد صالح احمد كسابرة", "محمد مراد عبدالله الدعامسة", "محمد نزار محمد ابو حيانه", "محمد ياسر عدنان قطوف", "معاذ اشرف سليمان الطرمان", "معتصم ابراهيم عبدالله المعايعة", "موسى خلوف عيسى العويد", "مؤمن محمد محمود الجريري", "نجاد سامر موسى الهواوشة", "نذير يوسف عبدالله مقبل", "هيثم عقاب فارس ابوسحلول", "وهيب زيد خلف الحديثات", "يحيى إسماعيل عبدالله الجبارات"
+                ] 
+            },
+            { 
+                id: '12-law', 
+                name: 'الثاني عشر قانون', 
+                gradeLevel: '12', 
+                color: 'slate', 
+                students: [
+                "احمد خطار حمود القعايدة", "احمد سليمان حمد ابو جودة", "احمد عاطف عبدالقادر ابوجودة", "احمد علي محمود الشيش", "احمد محمد بسام المعايعة", "احمد محمد حسين ابو عمران", "احمد نايف دخيل الحيصة", "اسامة سمير خالد رزق", "اصيل سعيد سلمان الحنيطي", "المعتصم بالله ايمن سليمان ابو رياش", "امجد محمد سالم الكعابنة", "انس صالح يوسف الحبابسة", "باسل احمد راجي الفلاحات", "بلال سفيان علي الفقهاء", "حكم خالد احمد ابو شنار", "حمزة احمد هزيل القطيش", "خلف امجد عوض السوارية", "ريان مصطفى عبدالهادي الكيلاني", "سلطان حسين سليمان الشوابكة", "شهم خير سالم المصلحة", "طه طارق عطية رمضان", "عائض احمد حمدان العرني", "عبدالله اشرف علي السوارية", "عبدالله عمر عبدالحميد الفشيكات", "عبدالله نايف علي الكعابنة", "عمر جعفر عثمان المصري", "عمر فراس جميل الحلافي", "عناد محمد الشاهين", "عيد مصطفى عيد السوارية", "مالك فوزان سليم سبيتان", "محمد الاسد عمر بركات", "محمد خالد عادل الطلاق", "محمد رسول احمد عبدالفتاح الدبس", "محمد عبدالرحمن سالم الموازرة", "محمد عمر صالح البطايحة", "محمد فارس عبدالغني الشوابكة", "محمد فلاح خلف الكعابنة", "محمد فوزان محمد العوامرة", "محمد نايف سلامة الكعابنة", "محمد نايف علي الكعابنة", "محمد نبيل احمد زيادة", "محمود شادي محمد حسن", "معتز حمزة عثمان نهنوش", "مهند بلال امين الحيحي", "مؤمن محسن عطوي الكعابنة", "نواف علاء نواف سعيد العزازمة", "ياسين ابراهيم محمد المرايقة", "يزن محمود احمد الشوابكة"
+                ] 
+            },
+            { 
+                id: '12-lang', 
+                name: 'الثاني عشر لغات', 
+                gradeLevel: '12', 
+                color: 'fuchsia', 
+                students: [
+                "ابراهيم محمد مرشد العبابسة", "احمد تيسير ابراهيم هماش", "احمد عايد خربوش العنزي", "احمد منير عبدالحافظ المرازقة", "اسامة سلامة عبدالله الطعامسة", "امير نضال حسن ابو مطر", "انس غسان سالم البويطل", "انس فادي مسلم الفقهاء", "اياس عيسى حسان ابوسرور", "تيسير باسم عدنان العزالين", "جعفر مأمون عواد العبابسة", "خالد نسيم يوسف ابوصبيح", "ريان اشرف حسان ابو عيشة", "زهدي ناصر زهدي وردة", "زياد حمادة فرغل مصطفى محمد", "زيد عدنان عارف الناطور", "سيف عمر منور الزيدان", "صالح ياسر صالح النشاش", "صقر سالم موسى ابوداهوك", "عبدالرحمن إسماعيل محمد رزق", "عبدالعزيز شيرزاد عبدالعزيز الشيخاني", "عبدالقادر سليمان يوسف ابوجودة", "عبدالمالك مروان هاشم ابوعمران", "عبيدة طارق عبدالوهاب مسودة", "محمد احمد سعد ابوالغنم", "محمد زكي حسني جابر", "مصطفى جمال عبدالرحمن الدبس", "مهند عماد يوسف الكعكة", "مؤمن امجد سلمان مصطفى", "يامن حسام احمد ابوشنار", "يزن باسم فريد القريوتي", "يوسف عبدالحليم صالح الحجوج"
+                ] 
+            },
+            { 
+                id: '12-business', 
+                name: 'الثاني عشر أعمال', 
+                gradeLevel: '12', 
+                color: 'emerald', 
+                students: [
+                "احمد عادل مفلح الهاشم", "احمد عبدالله احمد العجوري", "احمد عمر مطلق السليمات", "بشار علي عايد المراعبة", "زهير نذير محمد الحلاق", "صخر محمد عبدالله الخريبات", "عبدالله احمد عطا الناطور", "عساف محمود سالمة العساف", "علي محمد علي الهروط", "فيصل غازي عبدالوهاب الشوابكة", "محمد احمد محمد ابو غيث", "محمد اسماعيل ابراهيم المعايعة", "محمد جهاد مصطفى عساف", "محمد محمود عبدالحميد الحميمات", "محمود لؤي محمد الحايك", "معتز محمد نورالدين الخطيب", "معتصم عيد سالم المعايعة", "مهند محمد تحسين مصطفى الخطيب", "مؤمن عبدالرحيم حسن المشايخ", "مؤيد جمال عبدالرحمن الدبس"
+                ] 
+            },
+        ];
+
+        // --- COMPONENTS ---
+
+        const StaffModal = ({ isOpen, onClose, onSubmit, initialData }) => {
+            const [formData, setFormData] = useState({
+                sortId: 0,
+                name: '',
+                ministryNumber: '',
+                nationalNumber: '',
+                jobTitle: '',
+                category: Category.TEACHER,
+                degree: '',
+                qualification: '',
+                specialization: '',
+                birthDate: '',
+                appointmentDate: '',
+                workload: 0,
+                residence: '',
+                phoneNumber: '',
+                notes: ''
+            });
+
+            useEffect(() => {
+                if (initialData) {
+                    setFormData({
+                        sortId: initialData.sortId,
+                        name: initialData.name,
+                        ministryNumber: initialData.ministryNumber,
+                        nationalNumber: initialData.nationalNumber || '',
+                        jobTitle: initialData.jobTitle,
+                        category: initialData.category,
+                        degree: initialData.degree || '',
+                        qualification: initialData.qualification || '',
+                        specialization: initialData.specialization || '',
+                        birthDate: initialData.birthDate || '',
+                        appointmentDate: initialData.appointmentDate || '',
+                        workload: initialData.workload || 0,
+                        residence: initialData.residence || '',
+                        phoneNumber: initialData.phoneNumber || '',
+                        notes: initialData.notes || ''
+                    });
+                } else {
+                    setFormData({
+                        sortId: 0,
+                        name: '',
+                        ministryNumber: '',
+                        nationalNumber: '',
+                        jobTitle: '',
+                        category: Category.TEACHER,
+                        degree: '',
+                        qualification: '',
+                        specialization: '',
+                        birthDate: '',
+                        appointmentDate: '',
+                        workload: 0,
+                        residence: '',
+                        phoneNumber: '',
+                        notes: ''
+                    });
+                }
+            }, [initialData, isOpen]);
+
+            if (!isOpen) return null;
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSubmit(formData);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-up max-h-[90vh] overflow-y-auto">
+                        <div className="bg-indigo-600 p-4 flex justify-between items-center text-white sticky top-0 z-10">
+                            <h2 className="text-xl font-bold">
+                                {initialData ? 'تعديل بيانات الموظف' : 'إضافة موظف جديد'}
+                            </h2>
+                            <button onClick={onClose} className="hover:bg-white/20 p-1 rounded-full transition">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        
+                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">الرقم التسلسلي</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        value={formData.sortId || ''}
+                                        onChange={(e) => setFormData({ ...formData, sortId: parseInt(e.target.value) || 0 })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">الرقم الوزاري</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.ministryNumber}
+                                        onChange={(e) => setFormData({ ...formData, ministryNumber: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">الرقم الوطني</label>
+                                    <input
+                                        type="text"
+                                        value={formData.nationalNumber || ''}
+                                        onChange={(e) => setFormData({ ...formData, nationalNumber: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">الاسم الرباعي</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">الوظيفة</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.jobTitle}
+                                        onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">الفئة</label>
+                                    <select
+                                        value={formData.category}
+                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    >
+                                        {Object.values(Category).map((cat) => (
+                                            <option key={cat} value={cat}>{cat}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">المؤهل العلمي</label>
+                                    <input
+                                        type="text"
+                                        value={formData.qualification || ''}
+                                        onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">التخصص</label>
+                                    <input
+                                        type="text"
+                                        value={formData.specialization || ''}
+                                        onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">الدرجة</label>
+                                    <input
+                                        type="text"
+                                        value={formData.degree || ''}
+                                        onChange={(e) => setFormData({ ...formData, degree: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ الميلاد</label>
+                                    <input
+                                        type="text"
+                                        placeholder="dd/mm/yyyy"
+                                        value={formData.birthDate || ''}
+                                        onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-right"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ التعيين</label>
+                                    <input
+                                        type="text"
+                                        placeholder="dd/mm/yyyy"
+                                        value={formData.appointmentDate || ''}
+                                        onChange={(e) => setFormData({ ...formData, appointmentDate: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-right"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">النصاب</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        placeholder="0"
+                                        value={formData.workload || ''}
+                                        onChange={(e) => setFormData({ ...formData, workload: parseInt(e.target.value) || 0 })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">مكان السكن</label>
+                                    <input
+                                        type="text"
+                                        value={formData.residence || ''}
+                                        onChange={(e) => setFormData({ ...formData, residence: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">رقم الهاتف</label>
+                                    <input
+                                        type="text"
+                                        value={formData.phoneNumber || ''}
+                                        onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">ملاحظات إضافية</label>
+                                <textarea
+                                    value={formData.notes}
+                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none min-h-[60px]"
+                                />
+                            </div>
+
+                            <div className="pt-4 flex gap-3">
+                                <button
+                                    type="submit"
+                                    className="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-bold"
+                                >
+                                    حفظ البيانات
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 transition font-bold"
+                                >
+                                    إلغاء
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const DashboardStats = ({ staff }) => {
+            const adminCount = staff.filter(s => s.category === Category.ADMIN).length;
+            const teacherCount = staff.filter(s => s.category === Category.TEACHER).length;
+            const employeeCount = staff.filter(s => s.category === Category.EMPLOYEE).length;
+
+            const data = [
+                { name: Category.ADMIN, value: adminCount, color: '#4f46e5' },
+                { name: Category.TEACHER, value: teacherCount, color: '#0ea5e9' },
+                { name: Category.EMPLOYEE, value: employeeCount, color: '#10b981' },
+            ];
+
+            return (
+                <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
+                    <style>{`
+                        @keyframes glow-admin {
+                            0%, 100% { filter: drop-shadow(0 0 2px rgba(79, 70, 229, 0.3)); }
+                            50% { filter: drop-shadow(0 0 8px rgba(79, 70, 229, 0.8)); }
+                        }
+                        @keyframes glow-teacher {
+                            0%, 100% { filter: drop-shadow(0 0 2px rgba(14, 165, 233, 0.3)); }
+                            50% { filter: drop-shadow(0 0 8px rgba(14, 165, 233, 0.8)); }
+                        }
+                        @keyframes glow-employee {
+                            0%, 100% { filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.3)); }
+                            50% { filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.8)); }
+                        }
+                        
+                        .chart-segment {
+                            transition: all 0.3s ease;
+                            cursor: pointer;
+                        }
+                        .chart-segment:hover {
+                            opacity: 0.8;
+                            transform: scale(1.02);
+                        }
+                        
+                        .segment-admin { animation: glow-admin 3s infinite ease-in-out; }
+                        .segment-teacher { animation: glow-teacher 3s infinite ease-in-out; animation-delay: 1s; }
+                        .segment-employee { animation: glow-employee 3s infinite ease-in-out; animation-delay: 2s; }
+                    `}</style>
+
+                    <h3 className="text-lg font-bold text-gray-800 mb-6 border-b pb-2">إحصائيات الكادر</h3>
+                    
+                    <div className="flex flex-col gap-4 mb-8">
+                        <div className="bg-gradient-to-r from-gray-800 to-gray-700 rounded-xl p-4 text-white shadow-md flex items-center justify-between px-6 relative overflow-hidden">
+                            <div className="absolute right-0 top-0 h-full w-2 bg-yellow-500"></div>
+                            <div className="flex items-center gap-3 z-10">
+                                <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
+                                    <Users size={24} className="text-yellow-400" />
+                                </div>
+                                <div>
+                                    <p className="text-gray-200 text-xs font-medium">المجموع الكلي</p>
+                                    <p className="font-bold text-lg">إجمالي الكادر</p>
+                                </div>
+                            </div>
+                            <span className="text-4xl font-bold tracking-wider z-10">{staff.length}</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-sky-50 p-4 rounded-xl border border-sky-100 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
+                                <div className="absolute right-0 top-0 h-full w-1 bg-sky-500"></div>
+                                <div>
+                                    <p className="text-sm text-sky-700 mb-1 font-medium">المعلمون</p>
+                                    <p className="text-3xl font-bold text-sky-900">{teacherCount}</p>
+                                </div>
+                                <div className="bg-sky-100 p-3 rounded-full text-sky-600 group-hover:bg-sky-200 transition-colors">
+                                    <GraduationCap size={24} />
+                                </div>
+                            </div>
+
+                            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
+                                <div className="absolute right-0 top-0 h-full w-1 bg-indigo-500"></div>
+                                <div>
+                                    <p className="text-sm text-indigo-700 mb-1 font-medium">الإداريون</p>
+                                    <p className="text-3xl font-bold text-indigo-900">{adminCount}</p>
+                                </div>
+                                <div className="bg-indigo-100 p-3 rounded-full text-indigo-600 group-hover:bg-indigo-200 transition-colors">
+                                    <UserCog size={24} />
+                                </div>
+                            </div>
+
+                            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
+                                <div className="absolute right-0 top-0 h-full w-1 bg-emerald-500"></div>
+                                <div>
+                                    <p className="text-sm text-emerald-700 mb-1 font-medium">المستخدمون</p>
+                                    <p className="text-3xl font-bold text-emerald-900">{employeeCount}</p>
+                                </div>
+                                <div className="bg-emerald-100 p-3 rounded-full text-emerald-600 group-hover:bg-emerald-200 transition-colors">
+                                    <Briefcase size={24} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="h-72 w-full flex justify-center items-center bg-gray-50/50 rounded-xl border border-gray-100/50">
+                        <div className="w-full max-w-3xl h-full py-2">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={data}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={70}
+                                        outerRadius={100}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                    >
+                                        {data.map((entry, index) => {
+                                            let animationClass = '';
+                                            if (index === 0) animationClass = 'segment-admin';
+                                            else if (index === 1) animationClass = 'segment-teacher';
+                                            else animationClass = 'segment-employee';
+
+                                            return (
+                                                <Cell 
+                                                    key={`cell-${index}`} 
+                                                    fill={entry.color} 
+                                                    className={`chart-segment ${animationClass}`}
+                                                    stroke="none"
+                                                />
+                                            );
+                                        })}
+                                    </Pie>
+                                    <Tooltip 
+                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', textAlign: 'right', direction: 'rtl', padding: '10px' }}
+                                        itemStyle={{ color: '#374151', fontWeight: 'bold', fontFamily: 'Tajawal' }}
+                                        formatter={(value, name) => [`${value} موظف`, name]}
+                                    />
+                                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const StaffPage = () => {
+            const STORAGE_KEY = 'madaba_school_staff_v4';
+            const [staff, setStaff] = useState(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    try {
+                        const parsedStaff = JSON.parse(saved);
+                        if (Array.isArray(parsedStaff) && parsedStaff.length > 0) {
+                           return parsedStaff.sort((a, b) => a.sortId - b.sortId);
+                        }
+                    } catch (error) {
+                        return INITIAL_STAFF;
+                    }
+                }
+                return INITIAL_STAFF.sort((a, b) => a.sortId - b.sortId);
+            });
+
+            const [searchTerm, setSearchTerm] = useState('');
+            const [selectedCategory, setSelectedCategory] = useState('ALL');
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingStaff, setEditingStaff] = useState(null);
+
+            useEffect(() => {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(staff));
+            }, [staff]);
+
+            const filteredStaff = useMemo(() => {
+                return staff.filter(member => {
+                    const matchesSearch = 
+                        member.name.includes(searchTerm) || 
+                        member.ministryNumber.includes(searchTerm) ||
+                        member.jobTitle.includes(searchTerm);
+                    
+                    const matchesCategory = selectedCategory === 'ALL' || member.category === selectedCategory;
+                    
+                    return matchesSearch && matchesCategory;
+                }).sort((a, b) => a.sortId - b.sortId);
+            }, [staff, searchTerm, selectedCategory]);
+
+            const handleAddStaff = (data) => {
+                const newMember = {
+                    ...data,
+                    id: Date.now().toString()
+                };
+                setStaff([...staff, newMember]);
+            };
+
+            const handleEditStaff = (data) => {
+                if (!editingStaff) return;
+                const updatedStaff = staff.map(s => s.id === editingStaff.id ? { ...data, id: s.id } : s);
+                setStaff(updatedStaff);
+                setEditingStaff(null);
+            };
+
+            const handleDelete = (id) => {
+                if (window.confirm('هل أنت متأكد من حذف هذا الموظف؟')) {
+                    setStaff(staff.filter(s => s.id !== id));
+                }
+            };
+
+            const openEditModal = (member) => {
+                setEditingStaff(member);
+                setIsModalOpen(true);
+            };
+
+            const openAddModal = () => {
+                setEditingStaff(null);
+                setIsModalOpen(true);
+            };
+
+            return (
+                <div className="animate-fade-in">
+                    <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-6 gap-4">
+                        <div>
+                           <h2 className="text-2xl font-bold text-gray-800">إدارة الكادر المدرسي</h2>
+                           <p className="text-gray-500 text-sm mt-1">عرض وتعديل بيانات المعلمين والإداريين والمستخدمين</p>
+                        </div>
+                        <button 
+                            onClick={openAddModal}
+                            className="bg-yellow-500 hover:bg-yellow-600 text-indigo-900 px-5 py-2 rounded-lg font-bold transition shadow-md flex items-center gap-2 text-sm"
+                        >
+                            <Plus size={18} />
+                            إضافة موظف
+                        </button>
+                    </div>
+                    
+                    <DashboardStats staff={staff} />
+
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 sticky top-2 z-10">
+                        <div className="relative flex-1">
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                            <input
+                                type="text"
+                                placeholder="بحث بالاسم، الرقم الوزاري، أو الوظيفة..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm"
+                            />
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
+                            <button onClick={() => setSelectedCategory('ALL')} className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium transition text-sm ${selectedCategory === 'ALL' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>الكل</button>
+                            <button onClick={() => setSelectedCategory(Category.ADMIN)} className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium transition text-sm ${selectedCategory === Category.ADMIN ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>الإداريون</button>
+                            <button onClick={() => setSelectedCategory(Category.TEACHER)} className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium transition text-sm ${selectedCategory === Category.TEACHER ? 'bg-sky-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>المعلمون</button>
+                            <button onClick={() => setSelectedCategory(Category.EMPLOYEE)} className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium transition text-sm ${selectedCategory === Category.EMPLOYEE ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>المستخدمون</button>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-right min-w-[1200px]">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                    <tr>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700 w-12 text-center">#</th>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700">الاسم</th>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700">الرقم الوطني</th>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700">الوظيفة</th>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700">المؤهل</th>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700">التخصص</th>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700">تاريخ التعيين</th>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700">النصاب</th>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700">السكن والهاتف</th>
+                                        <th className="py-3 px-4 text-sm font-bold text-gray-700 text-left pl-6">إجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {filteredStaff.length > 0 ? (
+                                        filteredStaff.map((member) => (
+                                            <tr key={member.id} className="hover:bg-indigo-50/30 transition group">
+                                                <td className="py-3 px-4 text-center font-mono text-sm text-gray-500">{member.sortId}</td>
+                                                <td className="py-3 px-4">
+                                                    <div className="text-sm font-bold text-gray-900">{member.name}</div>
+                                                    <div className="text-xs text-gray-500 font-mono mt-0.5">{member.ministryNumber}</div>
+                                                </td>
+                                                <td className="py-3 px-4 font-mono text-sm text-gray-600">{member.nationalNumber || '-'}</td>
+                                                <td className="py-3 px-4">
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                                                            {member.jobTitle}
+                                                        </div>
+                                                        {member.degree && <span className="text-[10px] text-gray-500">الدرجة: {member.degree}</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    {member.qualification ? (
+                                                        <div className="flex items-center gap-1 text-sm text-gray-700">
+                                                            <GraduationCap size={14} className="text-indigo-400" />
+                                                            {member.qualification}
+                                                        </div>
+                                                    ) : <span className="text-gray-300">-</span>}
+                                                </td>
+                                                <td className="py-3 px-4 text-sm text-gray-700">{member.specialization || '-'}</td>
+                                                <td className="py-3 px-4">
+                                                    {member.appointmentDate ? (
+                                                        <div className="flex items-center gap-1 text-sm text-gray-700">
+                                                            <Calendar size={14} className="text-gray-400" />
+                                                            {member.appointmentDate}
+                                                        </div>
+                                                    ) : '-'}
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    {member.category === Category.TEACHER && member.workload ? (
+                                                        <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-md text-xs font-bold w-fit mx-auto">
+                                                            <BarChartIcon size={12} />
+                                                            {member.workload} حصة
+                                                        </div>
+                                                    ) : <span className="text-gray-300">-</span>}
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <div className="flex flex-col gap-1">
+                                                        {member.residence && (
+                                                            <div className="flex items-center gap-1 text-xs text-gray-600">
+                                                                <MapPin size={12} /> {member.residence}
+                                                            </div>
+                                                        )}
+                                                        {member.phoneNumber && (
+                                                            <div className="flex items-center gap-1 text-xs text-gray-600">
+                                                                <Phone size={12} /> {member.phoneNumber}
+                                                            </div>
+                                                        )}
+                                                        {!member.residence && !member.phoneNumber && <span className="text-gray-300">-</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="py-3 px-4 pl-6 text-left">
+                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button 
+                                                            onClick={() => openEditModal(member)}
+                                                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                                            title="تعديل"
+                                                        >
+                                                            <Edit2 size={18} />
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleDelete(member.id)}
+                                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
+                                                            title="حذف"
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={10} className="py-12 text-center text-gray-500">
+                                                <div className="flex flex-col items-center justify-center gap-2">
+                                                    <div className="bg-gray-100 p-3 rounded-full">
+                                                        <FileText size={24} className="text-gray-400" />
+                                                    </div>
+                                                    <p>لا توجد بيانات مطابقة للبحث</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <StaffModal
+                        isOpen={isModalOpen}
+                        onClose={() => setIsModalOpen(false)}
+                        onSubmit={editingStaff ? handleEditStaff : handleAddStaff}
+                        initialData={editingStaff}
+                    />
+                </div>
+            );
+        };
+
+        const StudentsPage = () => {
+            const STORAGE_KEY = 'madaba_school_students_v5';
+            const [classes, setClasses] = useState(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        return INITIAL_CLASSES.map(initClass => {
+                            const savedClass = parsed.find(p => p.id === initClass.id);
+                            if (savedClass) return savedClass;
+                            return initClass;
+                        });
+                    } catch (e) {
+                        return INITIAL_CLASSES;
+                    }
+                }
+                return INITIAL_CLASSES;
+            });
+
+            const [activeTabId, setActiveTabId] = useState(INITIAL_CLASSES[0].id);
+            const [isLoading, setIsLoading] = useState(false);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [newStudentName, setNewStudentName] = useState('');
+            const [editingOriginalName, setEditingOriginalName] = useState(null);
+            const [editingName, setEditingName] = useState('');
+            const [studentToDelete, setStudentToDelete] = useState(null);
+            const fileInputRef = useRef(null);
+
+            useEffect(() => {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(classes));
+            }, [classes]);
+
+            useEffect(() => {
+                setSearchQuery('');
+                setEditingOriginalName(null);
+                setStudentToDelete(null);
+            }, [activeTabId]);
+
+            const activeClass = classes.find(c => c.id === activeTabId) || classes[0];
+
+            const filteredStudents = useMemo(() => {
+                if (!searchQuery.trim()) return activeClass.students;
+                return activeClass.students.filter(student => 
+                    student.includes(searchQuery.trim())
+                );
+            }, [activeClass.students, searchQuery]);
+
+            const handleAddStudent = (e) => {
+                e.preventDefault();
+                const nameToAdd = newStudentName.trim();
+                if (!nameToAdd) return;
+
+                setClasses(prevClasses => prevClasses.map(cls => {
+                    if (cls.id === activeTabId) {
+                        if (cls.students.includes(nameToAdd)) {
+                            alert('هذا الاسم موجود بالفعل في القائمة.');
+                            return cls;
+                        }
+                        const updatedStudents = [...cls.students, nameToAdd].sort((a, b) => a.localeCompare(b, 'ar'));
+                        return { ...cls, students: updatedStudents };
+                    }
+                    return cls;
+                }));
+                setNewStudentName('');
+            };
+
+            const initiateDelete = (e, studentName) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setStudentToDelete(studentName);
+                if (editingOriginalName) {
+                    setEditingOriginalName(null);
+                    setEditingName('');
+                }
+            };
+
+            const confirmDelete = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (!studentToDelete) return;
+
+                setClasses(prevClasses => prevClasses.map(cls => {
+                    if (cls.id === activeTabId) {
+                        return { ...cls, students: cls.students.filter(s => s !== studentToDelete) };
+                    }
+                    return cls;
+                }));
+                
+                setStudentToDelete(null);
+            };
+
+            const cancelDelete = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setStudentToDelete(null);
+            };
+
+            const startEditing = (e, currentName) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setEditingOriginalName(currentName);
+                setEditingName(currentName);
+                setStudentToDelete(null);
+            };
+
+            const saveEdit = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!editingOriginalName || !editingName.trim()) return;
+
+                setClasses(prevClasses => prevClasses.map(cls => {
+                    if (cls.id === activeTabId) {
+                        const index = cls.students.indexOf(editingOriginalName);
+                        if (index !== -1) {
+                            const updatedStudents = [...cls.students];
+                            updatedStudents[index] = editingName.trim();
+                            updatedStudents.sort((a, b) => a.localeCompare(b, 'ar'));
+                            return { ...cls, students: updatedStudents };
+                        }
+                    }
+                    return cls;
+                }));
+                setEditingOriginalName(null);
+                setEditingName('');
+            };
+
+            const cancelEdit = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setEditingOriginalName(null);
+                setEditingName('');
+            };
+
+            const handleFileUpload = async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+
+                setIsLoading(true);
+
+                try {
+                    const data = await file.arrayBuffer();
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[worksheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    const extractedNames = [];
+                    const ignoredTerms = new Set(['الاسم', 'اسم الطالب', 'name', 'student name', 'م', 'الرقم', 'ملاحظات', 'الرقم الوطني', 'الجنس', 'الجنسية', 'التسلسل', 'م.', 'no', 'id']);
+
+                    jsonData.forEach(row => {
+                        row.forEach(cell => {
+                            if (cell !== null && cell !== undefined) {
+                                let cellStr = String(cell).trim();
+                                const cleanCell = cellStr.replace(/^[\d\.\-\)\s]+/, "").trim();
+                                if (!cleanCell) return;
+                                const lowerCell = cleanCell.toLowerCase();
+                                const isHeader = ignoredTerms.has(lowerCell);
+                                const isValidLength = cleanCell.length >= 2;
+                                if (isValidLength && !isHeader) {
+                                    extractedNames.push(cleanCell);
+                                }
+                            }
+                        });
+                    });
+
+                    if (extractedNames.length > 0) {
+                        let newCount = 0;
+                        setClasses(prevClasses => prevClasses.map(cls => {
+                            if (cls.id === activeTabId) {
+                                const uniqueNewNames = extractedNames.filter(name => !cls.students.includes(name));
+                                newCount = uniqueNewNames.length;
+                                if (uniqueNewNames.length === 0) return cls;
+                                const combined = [...cls.students, ...uniqueNewNames].sort((a, b) => a.localeCompare(b, 'ar'));
+                                return { ...cls, students: combined };
+                            }
+                            return cls;
+                        }));
+                        alert(`تمت العملية بنجاح!\nتم العثور على ${extractedNames.length} اسم في الملف.\nتمت إضافة ${newCount} اسم جديد.`);
+                    } else {
+                        alert('لم يتم العثور على أسماء صالحة في الملف.');
+                    }
+
+                } catch (error) {
+                    console.error("Excel Error:", error);
+                    alert('حدث خطأ أثناء قراءة الملف.');
+                } finally {
+                    setIsLoading(false);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                }
+            };
+
+            const totalStudents = classes.reduce((sum, cls) => sum + cls.students.length, 0);
+            const theme = activeClass.color;
+
+            return (
+                <div className="animate-fade-in space-y-6 pb-12">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex justify-between items-center">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                <Users className="text-indigo-600" />
+                                إدارة الطلبة
+                            </h2>
+                            <p className="text-gray-500 text-sm mt-1">العام الدراسي 2025 / 2026</p>
+                        </div>
+                        <div className="text-left bg-indigo-50 px-6 py-3 rounded-xl border border-indigo-100">
+                            <div className="text-3xl font-black text-indigo-900">{totalStudents}</div>
+                            <div className="text-xs text-indigo-600 font-bold">إجمالي الطلبة</div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-2 overflow-x-auto">
+                        <div className="flex gap-2 min-w-max">
+                            {classes.map(cls => (
+                                <button
+                                    key={cls.id}
+                                    onClick={() => setActiveTabId(cls.id)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${
+                                        activeTabId === cls.id 
+                                            ? `bg-${cls.color}-600 text-white shadow-md` 
+                                            : `bg-gray-50 text-gray-600 hover:bg-gray-100`
+                                    }`}
+                                >
+                                    {cls.name}
+                                    <span className={`text-xs py-0.5 px-1.5 rounded ${activeTabId === cls.id ? 'bg-white/20' : 'bg-gray-200 text-gray-700'}`}>
+                                        {cls.students.length}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className={`bg-white rounded-xl shadow-lg border-t-4 border-${theme}-600 min-h-[500px]`}>
+                        <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col lg:flex-row justify-between items-center gap-4">
+                            <h3 className={`text-lg font-bold text-${theme}-800 flex items-center gap-2`}>
+                                <School size={20} />
+                                {activeClass.name}
+                            </h3>
+                            
+                            <div className="flex gap-3 w-full lg:w-auto items-center flex-wrap">
+                                <div className="relative flex-1 min-w-[200px]">
+                                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder="بحث عن طالب..."
+                                        className="w-full pr-9 pl-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    />
+                                </div>
+
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    accept=".xlsx, .xls"
+                                    onChange={handleFileUpload}
+                                    className="hidden"
+                                />
+                                <button 
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition shadow-sm cursor-pointer active:scale-95"
+                                    disabled={isLoading}
+                                >
+                                    <FileType size={16} />
+                                    {isLoading ? 'جارٍ الرفع...' : 'رفع Excel'}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+                            <form onSubmit={handleAddStudent} className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={newStudentName}
+                                    onChange={(e) => setNewStudentName(e.target.value)}
+                                    placeholder="اكتب اسم الطالب الجديد هنا لإضافته..."
+                                    className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
+                                />
+                                <button 
+                                    type="submit"
+                                    disabled={!newStudentName.trim()}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-bold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    <Plus size={18} />
+                                    إضافة
+                                </button>
+                            </form>
+                        </div>
+
+                        <div className="p-6">
+                            {activeClass.students.length === 0 ? (
+                                <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-xl">
+                                    <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                                        <FileText className="text-gray-400" size={32} />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-600">القائمة فارغة</h3>
+                                    <p className="text-gray-400 text-sm mt-1">أضف طلاب يدوياً أو قم برفع ملف Excel</p>
+                                </div>
+                            ) : filteredStudents.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    <p>لا توجد نتائج مطابقة للبحث "{searchQuery}"</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {filteredStudents.map((student, index) => {
+                                        const isDeleting = studentToDelete === student;
+                                        const isEditing = editingOriginalName === student;
+
+                                        return (
+                                            <div 
+                                                key={`${activeTabId}-${student}`}
+                                                className={`group flex items-center justify-between p-3 bg-white border rounded-lg transition ${
+                                                    isDeleting 
+                                                        ? 'border-red-300 bg-red-50' 
+                                                        : 'border-gray-200 hover:border-indigo-300 hover:shadow-sm'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                                                    <span className={`w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold text-white bg-${activeClass.color}-500 shrink-0`}>
+                                                        {index + 1}
+                                                    </span>
+                                                    
+                                                    {isEditing ? (
+                                                        <input 
+                                                            type="text"
+                                                            value={editingName}
+                                                            onChange={(e) => setEditingName(e.target.value)}
+                                                            className="flex-1 border border-indigo-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <span className={`font-medium truncate select-all ${isDeleting ? 'text-red-700' : 'text-gray-700'}`}>
+                                                            {student}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex gap-1 mr-2 relative z-10 items-center">
+                                                    {isEditing ? (
+                                                        <>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={saveEdit}
+                                                                className="p-1.5 text-green-600 hover:bg-green-50 rounded transition cursor-pointer"
+                                                                title="حفظ"
+                                                            >
+                                                                <Check size={18} />
+                                                            </button>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={cancelEdit}
+                                                                className="p-1.5 text-gray-500 hover:bg-gray-50 rounded transition cursor-pointer"
+                                                                title="إلغاء"
+                                                            >
+                                                                <X size={18} />
+                                                            </button>
+                                                        </>
+                                                    ) : isDeleting ? (
+                                                        <>
+                                                            <span className="text-xs text-red-600 font-bold ml-1 hidden sm:inline">تأكيد؟</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={confirmDelete}
+                                                                className="p-1.5 bg-red-600 text-white hover:bg-red-700 rounded transition cursor-pointer shadow-sm"
+                                                                title="تأكيد الحذف"
+                                                            >
+                                                                <Check size={16} />
+                                                            </button>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={cancelDelete}
+                                                                className="p-1.5 bg-gray-200 text-gray-600 hover:bg-gray-300 rounded transition cursor-pointer shadow-sm"
+                                                                title="إلغاء"
+                                                            >
+                                                                <X size={16} />
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => startEditing(e, student)}
+                                                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition cursor-pointer"
+                                                                title="تعديل"
+                                                            >
+                                                                <Edit2 size={18} />
+                                                            </button>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => initiateDelete(e, student)}
+                                                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition cursor-pointer"
+                                                                title="حذف"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const SchoolInfoPage = () => {
+            const stats = useMemo(() => {
+                const studentsJson = localStorage.getItem('madaba_school_students_v5');
+                let classes = INITIAL_CLASSES;
+
+                if (studentsJson) {
+                    try {
+                        const parsed = JSON.parse(studentsJson);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            classes = parsed;
+                        }
+                    } catch (e) { console.error(e); }
+                }
+
+                let totalStudents = 0;
+                let grade11Count = 0;
+                let grade12Count = 0;
+                let grade11Sections = 0;
+                let grade12Sections = 0;
+
+                classes.forEach((cls) => {
+                    const count = cls.students.length;
+                    totalStudents += count;
+                    if (cls.gradeLevel === '11') {
+                        grade11Count += count;
+                        grade11Sections++;
+                    } else {
+                        grade12Count += count;
+                        grade12Sections++;
+                    }
+                });
+
+                const staffJson = localStorage.getItem('madaba_school_staff_v4');
+                let totalStaff = 0;
+                if (staffJson) {
+                    try {
+                        const staff = JSON.parse(staffJson);
+                        if (Array.isArray(staff)) {
+                            totalStaff = staff.length;
+                        }
+                    } catch (e) { console.error(e); }
+                } else {
+                    totalStaff = 32; 
+                }
+
+                return {
+                    totalStudents,
+                    totalStaff,
+                    grade11: { count: grade11Count, sections: grade11Sections },
+                    grade12: { count: grade12Count, sections: grade12Sections },
+                    totalSections: grade11Sections + grade12Sections
+                };
+            }, []);
+
+            const chartData = [
+                { name: 'الحادي عشر', students: stats.grade11.count, fill: '#3b82f6' },
+                { name: 'الثاني عشر', students: stats.grade12.count, fill: '#8b5cf6' },
+            ];
+
+            return (
+                <div className="space-y-8 animate-fade-in-up">
+                    <div className="bg-gradient-to-r from-gray-800 to-gray-700 rounded-xl p-6 text-white shadow-md relative overflow-hidden flex items-center">
+                        <div className="absolute right-0 top-0 h-full w-2 bg-yellow-500"></div>
+                        <div className="relative z-10 flex items-center gap-4">
+                            <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm shadow-inner">
+                                <School size={32} className="text-yellow-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg md:text-xl font-bold mb-1">مدرسة مادبا الثانوية للبنين</h2>
+                                <p className="text-gray-300 text-sm md:text-base font-medium">منارة للعلم والتربية منذ التأسيس</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-indigo-50 rounded-xl p-8 border border-indigo-100 relative">
+                        <h3 className="text-xl font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                            <BookOpen size={24} />
+                            نبذة عن المدرسة
+                        </h3>
+                        <div className="prose prose-indigo max-w-none text-gray-700 leading-9 text-lg text-justify">
+                            <p>
+                                تُعدّ مدرسة مادبا الثانوية للبنين من أعرق المدارس في المحافظة، حيث تحمل تاريخًا طويلًا في التعليم وتخرّج منها العديد من رجالات المجتمع وكبار السن الذين كان لهم أثر بارز في مختلف المجالات. ورغم قِدم مبانيها وبساطة مرافقها، فقد بقيت المدرسة رمزًا للعلم والانضباط، وبيئة أسهمت في تشكيل أجيال متعاقبة بروح المسؤولية والمعرفة. وتستمر المدرسة في أداء رسالتها التربوية عبر كادر تعليمي وإداري يمتلك الخبرة والالتزام.
+                            </p>
+                            
+                            <div className="mt-8 flex justify-end">
+                                <div className="flex flex-col items-center justify-center transform -rotate-2">
+                                    <span className="text-xs text-gray-500 mb-1 font-bold">مدير المدرسة</span>
+                                    <div className="font-bold text-indigo-900 text-lg border-b-2 border-yellow-400 pb-1 px-3 flex items-center gap-2" style={{ fontFamily: 'Tajawal' }}>
+                                    <PenTool size={16} className="text-indigo-600" />
+                                    لطفي المشارفة
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all hover:-translate-y-1 duration-300">
+                            <div className="flex items-center gap-3 mb-4 border-b border-gray-50 pb-4">
+                                <div className="bg-yellow-100 p-2.5 rounded-full text-yellow-600">
+                                    <Target size={24} />
+                                </div>
+                                <h3 className="text-2xl font-bold text-gray-800">الرؤية</h3>
+                            </div>
+                            <p className="text-gray-600 leading-relaxed text-justify text-lg">
+                                إعداد جيل مؤمن بالله، منتمٍ لوطنه وأمته، متسلح بالعلم والمعرفة، قادر على مواكبة التطورات التكنولوجية والعلمية، والمساهمة الفاعلة في بناء المجتمع وتقدمه.
+                            </p>
+                        </div>
+
+                        <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all hover:-translate-y-1 duration-300">
+                            <div className="flex items-center gap-3 mb-4 border-b border-gray-50 pb-4">
+                                <div className="bg-blue-100 p-2.5 rounded-full text-blue-600">
+                                    <Award size={24} />
+                                </div>
+                                <h3 className="text-2xl font-bold text-gray-800">الرسالة</h3>
+                            </div>
+                            <p className="text-gray-600 leading-relaxed text-justify text-lg">
+                                توفير بيئة تعليمية آمنة ومحفزة للإبداع والتميز، وتوظيف التكنولوجيا الحديثة في التعليم، وتنمية مهارات التفكير الناقد وحل المشكلات لدى الطلبة، وتعزيز القيم الأخلاقية والوطنية.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                        <div className="bg-gray-900 p-4 text-white flex justify-between items-center">
+                            <h3 className="text-lg font-bold flex items-center gap-2">
+                                <Layers className="text-yellow-400" />
+                                الهيكلية والإحصائيات
+                            </h3>
+                            <span className="bg-white/10 px-3 py-1 rounded-full text-xs text-yellow-300 border border-yellow-500/30">
+                                مدرسة ثانوية (11 - 12)
+                            </span>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center group hover:bg-blue-100 transition">
+                                    <div className="mx-auto w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-2 group-hover:bg-white group-hover:scale-110 transition">
+                                        <Users size={20} />
+                                    </div>
+                                    <div className="text-3xl font-black text-blue-900 mb-1">{stats.totalStudents}</div>
+                                    <div className="text-xs font-bold text-blue-600">إجمالي الطلبة</div>
+                                </div>
+                                
+                                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 text-center group hover:bg-indigo-100 transition">
+                                    <div className="mx-auto w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-2 group-hover:bg-white group-hover:scale-110 transition">
+                                        <Briefcase size={20} />
+                                    </div>
+                                    <div className="text-3xl font-black text-indigo-900 mb-1">{stats.totalStaff}</div>
+                                    <div className="text-xs font-bold text-indigo-600">الكادر الإداري والتدريسي</div>
+                                </div>
+
+                                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-center group hover:bg-purple-100 transition">
+                                    <div className="mx-auto w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-2 group-hover:bg-white group-hover:scale-110 transition">
+                                        <Layers size={20} />
+                                    </div>
+                                    <div className="text-3xl font-black text-purple-900 mb-1">2</div>
+                                    <div className="text-xs font-bold text-purple-600">المراحل الدراسية</div>
+                                </div>
+
+                                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center group hover:bg-emerald-100 transition">
+                                    <div className="mx-auto w-10 h-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-2 group-hover:bg-white group-hover:scale-110 transition">
+                                        <School size={20} />
+                                    </div>
+                                    <div className="text-3xl font-black text-emerald-900 mb-1">{stats.totalSections}</div>
+                                    <div className="text-xs font-bold text-emerald-600">عدد الشعب الصفية</div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                                <div className="relative">
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                                    
+                                    <div className="relative z-10 flex justify-center mb-8">
+                                        <div className="bg-gray-800 text-white px-6 py-2 rounded-lg shadow-md font-bold text-sm border-b-4 border-yellow-500">
+                                            مدرسة مادبا الثانوية للبنين
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-8 relative z-10">
+                                        <div className="flex flex-col items-center">
+                                            <div className="bg-blue-600 text-white w-full py-2 rounded-t-lg text-center font-bold text-sm shadow-md mb-4 relative">
+                                                الصف الحادي عشر
+                                                <div className="absolute left-1/2 -bottom-4 w-0.5 h-4 bg-blue-300 -translate-x-1/2"></div>
+                                            </div>
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 w-full text-center shadow-sm">
+                                                <div className="text-2xl font-black text-blue-800 mb-1">{stats.grade11.count}</div>
+                                                <div className="text-xs text-blue-600 mb-2">طالب</div>
+                                                <div className="flex flex-wrap justify-center gap-1">
+                                                <span className="bg-blue-200 text-blue-800 text-[10px] px-2 py-0.5 rounded-full">أكاديمي</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col items-center">
+                                            <div className="bg-purple-600 text-white w-full py-2 rounded-t-lg text-center font-bold text-sm shadow-md mb-4 relative">
+                                                الصف الثاني عشر
+                                                <div className="absolute left-1/2 -bottom-4 w-0.5 h-4 bg-purple-300 -translate-x-1/2"></div>
+                                            </div>
+                                            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 w-full text-center shadow-sm">
+                                                <div className="text-2xl font-black text-purple-800 mb-1">{stats.grade12.count}</div>
+                                                <div className="text-xs text-purple-600 mb-2">طالب</div>
+                                                <div className="flex flex-wrap justify-center gap-1">
+                                                <span className="bg-rose-100 text-rose-700 text-[10px] px-1.5 py-0.5 rounded-full">صحي</span>
+                                                <span className="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded-full">هندسي</span>
+                                                <span className="bg-cyan-100 text-cyan-700 text-[10px] px-1.5 py-0.5 rounded-full">تكنولوجيا</span>
+                                                <span className="bg-slate-200 text-slate-700 text-[10px] px-1.5 py-0.5 rounded-full">قانون</span>
+                                                <span className="bg-fuchsia-100 text-fuchsia-700 text-[10px] px-1.5 py-0.5 rounded-full">لغات</span>
+                                                <span className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded-full">أعمال</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="h-64 bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                    <h4 className="text-center text-sm font-bold text-gray-500 mb-4">توزيع الطلبة حسب المستوى الدراسي</h4>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="name" tick={{fontFamily: 'Tajawal'}} />
+                                            <YAxis />
+                                            <Tooltip 
+                                            cursor={{fill: 'transparent'}}
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontFamily: 'Tajawal', textAlign: 'right' }}
+                                            />
+                                            <Bar dataKey="students" radius={[4, 4, 0, 0]} barSize={50} animationDuration={1500}>
+                                            {chartData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                                            ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div className="flex items-start gap-4">
+                                <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 border border-indigo-100">
+                                    <MapPin size={28} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-gray-900 mb-1 text-lg">العنوان</h3>
+                                    <p className="text-gray-600 leading-relaxed">
+                                        المملكة الأردنية الهاشمية<br />
+                                        محافظة مادبا - شارع فلسطين<br />
+                                        بجانب مديرية التربية والتعليم
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-start gap-4">
+                                <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 border border-indigo-100">
+                                    <Phone size={28} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-gray-900 mb-1 text-lg">أرقام التواصل</h3>
+                                    <p className="text-gray-600" dir="ltr">+962 5 324 XXXX</p>
+                                    <p className="text-gray-600 mt-1">الإدارة المدرسية</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-4">
+                                <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 border border-indigo-100">
+                                    <Clock size={28} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-gray-900 mb-1 text-lg">أوقات الدوام</h3>
+                                    <p className="text-gray-600">الأحد - الخميس</p>
+                                    <p className="text-gray-600 mt-1">7:30 صباحاً - 2:00 ظهراً</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-red-100 p-2 rounded-full text-red-600">
+                                    <MapPin size={20} />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-800">موقع المدرسة على الخريطة</h3>
+                            </div>
+                            <a 
+                                href="https://maps.app.goo.gl/Myc1qwkiNWPHd2FYA?g_st=aw" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="hidden sm:flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-bold text-sm transition"
+                            >
+                                فتح في خرائط جوجل
+                                <ExternalLink size={16} />
+                            </a>
+                        </div>
+                        
+                        <div className="w-full h-80 bg-gray-100 rounded-xl overflow-hidden border border-gray-200 shadow-inner relative">
+                            <iframe 
+                                src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d393.7164395142282!2d35.790151998973094!3d31.72069525806699!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sar!2sjo!4v1764407765836!5m2!1sar!2sjo"
+                                width="100%" 
+                                height="100%" 
+                                style={{ border: 0 }} 
+                                allowFullScreen 
+                                loading="lazy" 
+                                referrerPolicy="no-referrer-when-downgrade"
+                                title="موقع مدرسة مادبا الثانوية للبنين"
+                                className="absolute inset-0"
+                            ></iframe>
+                        </div>
+
+                        <a 
+                            href="https://maps.app.goo.gl/Myc1qwkiNWPHd2FYA?g_st=aw" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-4 w-full sm:hidden flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 font-bold py-3 rounded-lg border border-indigo-100 hover:bg-indigo-100 transition"
+                        >
+                            <MapPin size={18} />
+                            فتح الموقع في تطبيق Google Maps
+                        </a>
+                    </div>
+                </div>
+            );
+        };
+
+        const AssessmentPage = () => {
+            const [visitorCount, setVisitorCount] = useState(0);
+
+            useEffect(() => {
+                const storedCount = localStorage.getItem('madaba_school_visitors');
+                let count = storedCount ? parseInt(storedCount) : 0;
+                setVisitorCount(count);
+            }, []);
+
+            const [rating, setRating] = useState(null);
+            const [hasVoted, setHasVoted] = useState(false);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [progress, setProgress] = useState(0);
+            
+            const [particles, setParticles] = useState([]);
+            const [particleType, setParticleType] = useState('heart');
+
+            useEffect(() => {
+                const savedRating = localStorage.getItem('madaba_school_rating');
+                if (savedRating) {
+                    setRating(parseInt(savedRating));
+                    setHasVoted(true);
+                }
+            }, []);
+
+            const handleRate = (value) => {
+                if (isSubmitting || hasVoted) return;
+
+                setIsSubmitting(true);
+                setProgress(0);
+
+                const interval = setInterval(() => {
+                    setProgress((prev) => {
+                        if (prev >= 100) {
+                            clearInterval(interval);
+                            return 100;
+                        }
+                        return Math.min(prev + Math.floor(Math.random() * 5) + 2, 99); 
+                    });
+                }, 50);
+
+                setTimeout(() => {
+                    clearInterval(interval);
+                    setProgress(100);
+                    
+                    setParticleType(value >= 3 ? 'heart' : 'broken');
+                    const newParticles = Array.from({ length: 30 }).map((_, i) => ({
+                        id: i,
+                        left: Math.random() * 100, 
+                        delay: Math.random() * 0.5, 
+                        duration: 1 + Math.random() * 1.5, 
+                        scale: 0.5 + Math.random() * 0.8 
+                    }));
+                    setParticles(newParticles);
+
+                    setTimeout(() => setParticles([]), 3000);
+
+                    setTimeout(() => {
+                        setRating(value);
+                        setHasVoted(true);
+                        setIsSubmitting(false);
+                        localStorage.setItem('madaba_school_rating', value.toString());
+                    }, 300);
+                }, 1500);
+            };
+
+            const emojis = [
+                { id: 1, icon: <Frown size={40} />, label: 'غير راضٍ', color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
+                { id: 2, icon: <Meh size={40} />, label: 'حيادي', color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' },
+                { id: 3, icon: <Smile size={40} />, label: 'جيد', color: 'text-yellow-500', bg: 'bg-yellow-50', border: 'border-yellow-200' },
+                { id: 4, icon: <ThumbsUp size={40} />, label: 'ممتاز', color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
+                { id: 5, icon: <Heart size={40} />, label: 'رائع جداً', color: 'text-rose-500', bg: 'bg-rose-50', border: 'border-rose-200' },
+            ];
+
+            return (
+                <div className="space-y-8 animate-fade-in-up pb-12">
+                    <style>{`
+                        @keyframes floatUp {
+                            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+                            20% { opacity: 1; }
+                            100% { transform: translateY(-200px) scale(1.2); opacity: 0; }
+                        }
+                        .particle {
+                            position: absolute;
+                            bottom: 0;
+                            pointer-events: none;
+                            animation-name: floatUp;
+                            animation-timing-function: ease-out;
+                            z-index: 50;
+                        }
+                    `}</style>
+
+                    <div className="bg-gradient-to-r from-gray-800 to-gray-700 rounded-xl p-6 text-white shadow-md relative overflow-hidden flex items-center">
+                        <div className="absolute right-0 top-0 h-full w-2 bg-yellow-500"></div>
+                        <div className="relative z-10 flex items-center gap-4">
+                            <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm shadow-inner">
+                                <Star size={32} className="text-yellow-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg md:text-xl font-bold mb-1">التقييم ورضا الزوار</h2>
+                                <p className="text-gray-300 text-sm md:text-base font-medium">رأيك يهمنا لتطوير خدماتنا الإلكترونية</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8 flex flex-col items-center justify-center text-center min-h-[350px] relative overflow-hidden">
+                            {particles.length > 0 && (
+                                <div className="absolute inset-0 pointer-events-none w-full h-full overflow-hidden">
+                                    {particles.map((p) => (
+                                        <div
+                                            key={p.id}
+                                            className="particle"
+                                            style={{
+                                                left: `${p.left}%`,
+                                                animationDelay: `${p.delay}s`,
+                                                animationDuration: `${p.duration}s`,
+                                                fontSize: `${p.scale}rem`
+                                            }}
+                                        >
+                                            {particleType === 'heart' ? (
+                                                <Heart className="fill-rose-500 text-rose-500" size={24} />
+                                            ) : (
+                                                <HeartCrack className="text-gray-400 fill-gray-200" size={24} />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <h3 className="text-2xl font-bold text-gray-800 mb-2 relative z-10">ما مدى رضاك عن الموقع؟</h3>
+                            
+                            {isSubmitting ? (
+                                <div className="w-full max-w-sm mt-8 animate-fade-in relative z-10">
+                                    <div className="flex justify-between text-sm text-gray-500 mb-2 font-bold">
+                                        <span>جاري تسجيل تقييمك...</span>
+                                        <span>{progress}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden shadow-inner border border-gray-200">
+                                        <div 
+                                            className="bg-gradient-to-r from-indigo-500 to-purple-600 h-full rounded-full transition-all duration-75 ease-out flex items-center justify-center relative overflow-hidden"
+                                            style={{ width: `${progress}%` }}
+                                        >
+                                            <div className="absolute inset-0 bg-white/20 w-full h-full" 
+                                                style={{ 
+                                                    backgroundImage: 'linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent)',
+                                                    backgroundSize: '1rem 1rem'
+                                                }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-4 animate-pulse">شكراً لمشاركتك رأيك</p>
+                                </div>
+                            ) : !hasVoted ? (
+                                <>
+                                    <p className="text-gray-500 mb-8 relative z-10">اختر الوجه الذي يعبر عن تجربتك</p>
+                                    <div className="flex flex-wrap justify-center gap-4 mb-8 relative z-10">
+                                        {emojis.map((item) => {
+                                            const isActive = rating === item.id;
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    onClick={() => handleRate(item.id)}
+                                                    disabled={isSubmitting}
+                                                    className={`group relative flex flex-col items-center gap-2 p-4 rounded-2xl transition-all duration-300 transform 
+                                                        ${isActive 
+                                                            ? `${item.bg} ${item.border} border-2 scale-110 shadow-lg ring-2 ring-offset-2 ring-${item.color.split('-')[1]}-300` 
+                                                            : 'bg-gray-50 border border-gray-100 hover:scale-105 hover:bg-gray-100 hover:shadow-md'
+                                                        }
+                                                    `}
+                                                >
+                                                    <div className={`transition-colors duration-300 ${isActive ? item.color : 'text-gray-400 group-hover:text-gray-600'}`}>
+                                                        {item.icon}
+                                                    </div>
+                                                    <span className={`text-xs font-bold transition-colors ${isActive ? item.color : 'text-gray-400'}`}>
+                                                        {item.label}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="w-full bg-green-50 border border-green-100 rounded-xl p-6 animate-bounce-in mt-4 relative z-10">
+                                    <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
+                                        <Heart className="fill-green-600" size={32} />
+                                    </div>
+                                    <h4 className="text-xl font-bold text-green-800 mb-2">شكراً لك!</h4>
+                                    <p className="text-green-700 font-medium">
+                                        تم استلام تقييمك بنجاح. نقدر مساهمتك في تحسين الموقع.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8 flex flex-col items-center justify-center relative overflow-hidden">
+                            <div className="absolute inset-0 bg-indigo-50/50 opacity-50 pattern-dots"></div>
+                            
+                            <h3 className="text-xl font-bold text-gray-800 mb-8 relative z-10">إحصائيات الزوار</h3>
+
+                            <div className="relative group cursor-default z-10">
+                                <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+                                
+                                <div className="relative w-48 h-48 bg-white rounded-full flex flex-col items-center justify-center shadow-xl border-4 border-indigo-50 transition-transform duration-300 transform group-hover:scale-105">
+                                    <p className="text-indigo-900 font-bold mb-2 text-sm">عدد زوار الموقع</p>
+                                    <div className="bg-indigo-50 p-3 rounded-full mb-2 text-indigo-600 z-10">
+                                        <Eye size={24} />
+                                    </div>
+                                    <div className="text-4xl font-black text-gray-800 tabular-nums z-10">
+                                        {visitorCount.toLocaleString()}
+                                    </div>
+                                    <div className="absolute bottom-2 flex items-center gap-1.5 bg-green-50 px-3 py-1 rounded-full border border-green-100 z-10">
+                                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                        <span className="text-[10px] text-green-700 font-bold">متصل الآن</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <p className="mt-8 text-sm text-gray-500 text-center relative z-10 max-w-xs">
+                                يتم تحديث عدد الزوار بشكل دوري لضمان دقة الإحصائيات ومتابعة التفاعل مع الموقع.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const PhotosPage = () => {
+            const STORAGE_KEY = 'madaba_school_gallery_v1';
+            const categories = ['فعاليات', 'حفلات', 'صور تثقيفية', 'مرافق المدرسة', 'نشاطات طلابية', 'أخرى'];
+
+            const [images, setImages] = useState(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    try {
+                        return JSON.parse(saved);
+                    } catch (e) {
+                        return [];
+                    }
+                }
+                return [];
+            });
+
+            const [activeCategory, setActiveCategory] = useState('الكل');
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            
+            const [newTitle, setNewTitle] = useState('');
+            const [newCategory, setNewCategory] = useState(categories[0]);
+            const [selectedFile, setSelectedFile] = useState(null);
+            const [previewUrl, setPreviewUrl] = useState(null);
+            const fileInputRef = useRef(null);
+
+            useEffect(() => {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(images));
+            }, [images]);
+
+            const handleFileSelect = (e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                    if (file.size > 1024 * 1024 * 10) { 
+                        alert('حجم الصورة كبير جداً. يرجى اختيار صورة أقل من 10 ميجابايت لضمان سرعة الموقع.');
+                        return;
+                    }
+                    setSelectedFile(file);
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setPreviewUrl(reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!newTitle || !previewUrl) return;
+
+                const newImage = {
+                    id: Date.now().toString(),
+                    title: newTitle,
+                    category: newCategory,
+                    dataUrl: previewUrl,
+                    dateAdded: new Date().toLocaleDateString('ar-JO')
+                };
+
+                setImages([newImage, ...images]);
+                resetForm();
+                setIsModalOpen(false);
+            };
+
+            const resetForm = () => {
+                setNewTitle('');
+                setNewCategory(categories[0]);
+                setSelectedFile(null);
+                setPreviewUrl(null);
+            };
+
+            const handleDelete = (id) => {
+                if (confirm('هل أنت متأكد من حذف هذه الصورة؟')) {
+                    setImages(images.filter(img => img.id !== id));
+                }
+            };
+
+            const filteredImages = activeCategory === 'الكل' 
+                ? images 
+                : images.filter(img => img.category === activeCategory);
+
+            return (
+                <div className="space-y-6 animate-fade-in pb-12">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                <ImageIcon className="text-indigo-600" />
+                                الصور
+                            </h2>
+                            <p className="text-gray-500 text-sm mt-1">أرشيف صور المدرسة والفعاليات والصور التثقيفية</p>
+                        </div>
+                        <button 
+                            onClick={() => setIsModalOpen(true)}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-bold transition shadow-md flex items-center gap-2"
+                        >
+                            <Plus size={20} />
+                            إضافة صورة جديدة
+                        </button>
+                    </div>
+
+                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        <button
+                            onClick={() => setActiveCategory('الكل')}
+                            className={`px-4 py-2 rounded-full whitespace-nowrap font-medium transition text-sm flex items-center gap-2 ${
+                                activeCategory === 'الكل' 
+                                    ? 'bg-gray-800 text-white shadow-md' 
+                                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Filter size={14} />
+                            الكل
+                        </button>
+                        {categories.map(cat => (
+                            <button
+                                key={cat}
+                                onClick={() => setActiveCategory(cat)}
+                                className={`px-4 py-2 rounded-full whitespace-nowrap font-medium transition text-sm ${
+                                    activeCategory === cat 
+                                        ? 'bg-indigo-600 text-white shadow-md' 
+                                        : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+
+                    {filteredImages.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                            <div className="bg-white p-4 rounded-full shadow-sm mb-4">
+                                <ImageIcon size={40} className="text-gray-300" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-600">لا توجد صور لعرضها</h3>
+                            <p className="text-gray-400 text-sm mt-1">
+                                {activeCategory === 'الكل' ? 'ابدأ بإضافة صور للمعرض' : 'لا توجد صور في هذا التصنيف'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {filteredImages.map((image) => (
+                                <div key={image.id} className="group bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                                    <div className="relative aspect-video overflow-hidden bg-gray-100">
+                                        <img 
+                                            src={image.dataUrl} 
+                                            alt={image.title} 
+                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                        />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <button 
+                                                onClick={() => handleDelete(image.id)}
+                                                className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition transform scale-0 group-hover:scale-100"
+                                                title="حذف الصورة"
+                                            >
+                                                <Trash2 size={20} />
+                                            </button>
+                                        </div>
+                                        <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-gray-700 shadow-sm">
+                                            {image.category}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="p-4">
+                                        <h3 className="font-bold text-gray-800 text-lg mb-2 truncate">{image.title}</h3>
+                                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                                            <span className="flex items-center gap-1">
+                                                <Calendar size={14} />
+                                                {image.dateAdded}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <Tag size={14} />
+                                                {image.category}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {isModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-bounce-in">
+                                <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
+                                    <h3 className="font-bold text-lg">إضافة صورة جديدة</h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="hover:bg-white/20 p-1 rounded-full transition">
+                                        <X size={24} />
+                                    </button>
+                                </div>
+                                
+                                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                                    <div 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+                                            previewUrl ? 'border-indigo-300 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <input 
+                                            type="file" 
+                                            ref={fileInputRef} 
+                                            onChange={handleFileSelect} 
+                                            accept="image/*" 
+                                            className="hidden" 
+                                        />
+                                        {previewUrl ? (
+                                            <div className="relative group">
+                                                <img src={previewUrl} alt="Preview" className="max-h-48 mx-auto rounded-lg shadow-sm" />
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
+                                                    <p className="text-white font-bold text-sm bg-black/50 px-3 py-1 rounded-full">تغيير الصورة</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-3 text-gray-500">
+                                                <div className="bg-indigo-100 p-4 rounded-full text-indigo-600">
+                                                    <UploadCloud size={32} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-gray-700">اضغط هنا لاختيار صورة</p>
+                                                    <p className="text-xs mt-1">JPG, PNG (الحد الأقصى 10 ميجابايت)</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">عنوان الصورة</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={newTitle}
+                                            onChange={(e) => setNewTitle(e.target.value)}
+                                            placeholder="مثال: حفل تكريم الأوائل"
+                                            className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">التصنيف</label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            {categories.map(cat => (
+                                                <button
+                                                    key={cat}
+                                                    type="button"
+                                                    onClick={() => setNewCategory(cat)}
+                                                    className={`text-sm py-2 px-3 rounded-lg border transition ${
+                                                        newCategory === cat 
+                                                            ? 'bg-indigo-50 border-indigo-500 text-indigo-700 font-bold' 
+                                                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    {cat}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={!selectedFile || !newTitle}
+                                        className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                                    >
+                                        حفظ الصورة
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [activePage, setActivePage] = useState('school');
+            const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+            const [backupStatus, setBackupStatus] = useState('');
+            const fileInputRef = useRef(null);
+
+            // --- Visitor Counter Logic ---
+            useEffect(() => {
+                const sessionKey = 'madaba_school_session_active';
+                const storageKey = 'madaba_school_visitors';
+                const isSessionActive = sessionStorage.getItem(sessionKey);
+
+                if (!isSessionActive) {
+                    const currentCount = parseInt(localStorage.getItem(storageKey) || '1250'); 
+                    const newCount = currentCount + 1;
+                    localStorage.setItem(storageKey, newCount.toString());
+                    sessionStorage.setItem(sessionKey, 'true'); 
+                }
+            }, []);
+
+            const handleExportData = async () => {
+                setBackupStatus('جاري تجميع البيانات... قد يستغرق هذا وقتاً للصور الكبيرة');
+                try {
+                    // Fetch gallery from IDB
+                    const gallery = await db.getAllImages();
+
+                    const data = {
+                        staff: localStorage.getItem('madaba_school_staff_v4'),
+                        students: localStorage.getItem('madaba_school_students_v5'),
+                        // Embed gallery in JSON
+                        gallery: gallery, 
+                        rating: localStorage.getItem('madaba_school_rating'),
+                        visitors: localStorage.getItem('madaba_school_visitors'),
+                        timestamp: new Date().toISOString()
+                    };
+
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `madaba-school-backup-${new Date().toLocaleDateString('en-CA')}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    setBackupStatus('');
+                    setIsBackupModalOpen(false);
+                } catch (e) {
+                    console.error(e);
+                    setBackupStatus('حدث خطأ أثناء التصدير.');
+                }
+            };
+
+            const handleImportData = (event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+
+                setBackupStatus('جاري قراءة الملف... الرجاء الانتظار');
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const content = e.target?.result;
+                        const data = JSON.parse(content);
+
+                        if (!data.timestamp) {
+                            alert('هذا الملف غير صالح أو تالف.');
+                            setBackupStatus('');
+                            return;
+                        }
+
+                        if (confirm('هل أنت متأكد؟ سيتم استبدال جميع البيانات الحالية بالبيانات الموجودة في الملف.')) {
+                            setBackupStatus('جاري استعادة البيانات...');
+                            
+                            if (data.staff) localStorage.setItem('madaba_school_staff_v4', data.staff);
+                            if (data.students) localStorage.setItem('madaba_school_students_v5', data.students);
+                            
+                            // Restore Gallery to IndexedDB
+                            if (data.gallery && Array.isArray(data.gallery)) {
+                                setBackupStatus('جاري استعادة الصور (قد يستغرق وقتاً)...');
+                                await db.clearGallery();
+                                for (const img of data.gallery) {
+                                    await db.addImage(img);
+                                }
+                            } else if (data.gallery) {
+                                // Handle legacy local storage backup format
+                                localStorage.setItem('madaba_school_gallery_v1', data.gallery);
+                            }
+
+                            if (data.rating) localStorage.setItem('madaba_school_rating', data.rating);
+                            if (data.visitors) localStorage.setItem('madaba_school_visitors', data.visitors);
+                            
+                            alert('تم استعادة البيانات بنجاح! سيتم تحديث الصفحة الآن.');
+                            window.location.reload();
+                        } else {
+                            setBackupStatus('');
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        alert('حدث خطأ أثناء قراءة الملف.');
+                        setBackupStatus('');
+                    }
+                };
+                reader.readAsText(file);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-12 flex flex-col">
+                    <header className="bg-indigo-900 text-white shadow-lg sticky top-0 z-50 relative overflow-hidden">
+                        <div className="container mx-auto px-4 pt-6 pb-2 relative z-10">
+                            <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-white p-2 rounded-lg shadow-md shrink-0 flex items-center justify-center">
+                                        <img 
+                                            src="https://moe.gov.jo/sites/all/themes/moe/images/logo3.png" 
+                                            alt="MOE Logo" 
+                                            style={{ width: '130px', height: 'auto' }}
+                                            className="object-contain"
+                                        />
+                                    </div>
+                                    
+                                    <div className="flex flex-col items-start justify-center">
+                                        <h2 className="text-indigo-200 text-xs md:text-sm font-medium mb-0.5">
+                                            مديرية التربية والتعليم لواء قصبة مادبا
+                                        </h2>
+                                        <h1 className="text-base md:text-lg font-bold whitespace-nowrap leading-tight">
+                                            مدرسة مادبا الثانوية للبنين
+                                        </h1>
+                                        <p className="text-indigo-300 text-[10px] md:text-xs mt-0.5">
+                                            نظام الإدارة المدرسي الموحد
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={() => setIsBackupModalOpen(true)}
+                                        className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-indigo-900 px-4 py-1.5 rounded-full font-bold text-xs md:text-sm transition shadow-md"
+                                    >
+                                        <Database size={16} />
+                                        <span>نسخ / استعادة البيانات</span>
+                                    </button>
+                                    <div className="hidden md:block text-sm text-indigo-300 bg-indigo-950/50 px-4 py-1 rounded-full border border-indigo-800 shadow-sm">
+                                        العام الدراسي 2025 / 2026
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                                <button
+                                    onClick={() => setActivePage('school')}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-t-lg font-bold transition-all relative top-[1px] ${
+                                        activePage === 'school' 
+                                        ? 'bg-gray-50 text-indigo-900 border-b-4 border-yellow-400 shadow-sm' 
+                                        : 'text-indigo-200 hover:bg-indigo-800/50 hover:text-white'
+                                    }`}
+                                >
+                                    <School size={20} />
+                                    <span className="whitespace-nowrap">معلومات المدرسة</span>
+                                </button>
+                                
+                                <button
+                                    onClick={() => setActivePage('staff')}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-t-lg font-bold transition-all relative top-[1px] ${
+                                        activePage === 'staff' 
+                                        ? 'bg-gray-50 text-indigo-900 border-b-4 border-yellow-400 shadow-sm' 
+                                        : 'text-indigo-200 hover:bg-indigo-800/50 hover:text-white'
+                                    }`}
+                                >
+                                    <Users size={20} />
+                                    <span className="whitespace-nowrap">معلومات الكادر</span>
+                                </button>
+
+                                <button
+                                    onClick={() => setActivePage('students')}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-t-lg font-bold transition-all relative top-[1px] ${
+                                        activePage === 'students' 
+                                        ? 'bg-gray-50 text-indigo-900 border-b-4 border-yellow-400 shadow-sm' 
+                                        : 'text-indigo-200 hover:bg-indigo-800/50 hover:text-white'
+                                    }`}
+                                >
+                                    <GraduationCap size={20} />
+                                    <span className="whitespace-nowrap">معلومات الطلبة</span>
+                                </button>
+
+                                <button
+                                    onClick={() => setActivePage('photos')}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-t-lg font-bold transition-all relative top-[1px] ${
+                                        activePage === 'photos' 
+                                        ? 'bg-gray-50 text-indigo-900 border-b-4 border-yellow-400 shadow-sm' 
+                                        : 'text-indigo-200 hover:bg-indigo-800/50 hover:text-white'
+                                    }`}
+                                >
+                                    <ImageIcon size={20} />
+                                    <span className="whitespace-nowrap">الصور</span>
+                                </button>
+
+                                <button
+                                    onClick={() => setActivePage('assessment')}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-t-lg font-bold transition-all relative top-[1px] ${
+                                        activePage === 'assessment' 
+                                        ? 'bg-gray-50 text-indigo-900 border-b-4 border-yellow-400 shadow-sm' 
+                                        : 'text-indigo-200 hover:bg-indigo-800/50 hover:text-white'
+                                    }`}
+                                >
+                                    <Star size={20} />
+                                    <span className="whitespace-nowrap">التقييم</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="absolute bottom-0 left-0 w-full z-20">
+                            <div className="h-1.5 w-full bg-gradient-to-r from-indigo-800 via-yellow-500 to-indigo-800 shadow-lg opacity-90"></div>
+                        </div>
+                    </header>
+
+                    <main className="container mx-auto px-4 py-8 flex-grow">
+                        {activePage === 'school' && <SchoolInfoPage />}
+                        {activePage === 'staff' && <StaffPage />}
+                        {activePage === 'students' && <StudentsPage />}
+                        {activePage === 'photos' && <PhotosPage />}
+                        {activePage === 'assessment' && <AssessmentPage />}
+                    </main>
+
+                    <footer className="bg-white border-t border-gray-200 mt-auto">
+                        <div className="container mx-auto px-4 py-6">
+                            <div className="flex flex-col items-center justify-center gap-4 text-center">
+                                <p className="text-gray-500 text-sm">
+                                    &copy; 2025 مدرسة مادبا الثانوية للبنين - جميع الحقوق محفوظة
+                                </p>
+                                
+                                <div className="text-gray-400 text-xs">
+                                    <span className="font-medium">تطوير المعلم / </span>
+                                    <span className="font-bold text-gray-500">عيسى الرواحنة</span>
+                                </div>
+                            </div>
+                        </div>
+                    </footer>
+
+                    {isBackupModalOpen && (
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-bounce-in">
+                                <div className="bg-indigo-900 p-4 flex justify-between items-center text-white">
+                                    <h3 className="font-bold text-lg flex items-center gap-2">
+                                        <Database size={20} className="text-yellow-400" />
+                                        إدارة بيانات الموقع
+                                    </h3>
+                                    <button onClick={() => setIsBackupModalOpen(false)} className="hover:bg-white/20 p-1 rounded-full transition">
+                                        <X size={24} />
+                                    </button>
+                                </div>
+
+                                <div className="p-6 space-y-6">
+                                    <p className="text-sm text-gray-600 text-center leading-relaxed">
+                                        هذا الموقع لا يستخدم قاعدة بيانات سحابية. البيانات محفوظة على هذا الجهاز فقط. لنقل البيانات لجهاز آخر أو لحفظ نسخة احتياطية، استخدم الخيارات أدناه.
+                                    </p>
+
+                                    <div className="space-y-4">
+                                        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 hover:border-indigo-300 transition">
+                                            <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                                                <Download size={18} className="text-indigo-600" />
+                                                حفظ نسخة احتياطية
+                                            </h4>
+                                            <p className="text-xs text-gray-500 mb-3">
+                                                تحميل ملف يحتوي على كافة بيانات الموقع (بما في ذلك الصور). <span className="text-red-500">قد يكون الملف كبيراً.</span>
+                                            </p>
+                                            <button 
+                                                onClick={handleExportData}
+                                                className="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition shadow-sm"
+                                            >
+                                                تحميل ملف البيانات
+                                            </button>
+                                        </div>
+
+                                        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 hover:border-emerald-300 transition">
+                                            <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                                                <Upload size={18} className="text-emerald-600" />
+                                                استعادة البيانات
+                                            </h4>
+                                            <p className="text-xs text-gray-500 mb-3">
+                                                رفع ملف بيانات تم حفظه سابقاً. <span className="text-red-500 font-bold">تنبيه: سيتم استبدال البيانات الحالية.</span>
+                                            </p>
+                                            <input 
+                                                type="file" 
+                                                ref={fileInputRef}
+                                                onChange={handleImportData}
+                                                accept=".json"
+                                                className="hidden"
+                                            />
+                                            <button 
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="w-full bg-white border border-gray-300 text-gray-700 py-2 rounded-lg font-bold text-sm hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition shadow-sm"
+                                            >
+                                                رفع ملف لاستعادته
+                                            </button>
+                                        </div>
+                                        
+                                        {backupStatus && (
+                                            <div className="text-center text-xs font-bold text-indigo-600 bg-indigo-50 p-2 rounded animate-pulse">
+                                                {backupStatus}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
